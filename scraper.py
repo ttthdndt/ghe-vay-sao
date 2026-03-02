@@ -44,17 +44,15 @@ class ProxyManager:
         proxies = [
             "123.45.67.89:8080:myuser:mypass",
             "98.76.54.32:3128:user2:pass2",
-            "11.22.33.44:1080:u3:p3",
         ]
         pm = ProxyManager(proxies)
     """
 
     def __init__(self, proxy_list: list[str]):
-        self.proxies = list(proxy_list)   # mutable — bad proxies get removed
+        self.proxies = list(proxy_list)
         self._index = 0
 
     def _parse(self, proxy_str: str) -> dict:
-        """Convert IP:Port:User:Pass → requests proxy dict."""
         parts = proxy_str.strip().split(":")
         if len(parts) == 4:
             ip, port, user, password = parts
@@ -77,7 +75,6 @@ class ProxyManager:
         return self._parse(p) if p else None
 
     def remove_current(self):
-        """Remove the blocked proxy; next proxy slides into its position."""
         if not self.proxies:
             return
         bad = self.proxies[self._index % len(self.proxies)]
@@ -87,7 +84,6 @@ class ProxyManager:
             self._index = self._index % len(self.proxies)
 
     def rotate(self):
-        """Advance to the next proxy (round-robin)."""
         if len(self.proxies) > 1:
             self._index = (self._index + 1) % len(self.proxies)
             logger.info(f"🔄 Rotated → {self.current}")
@@ -109,6 +105,20 @@ def is_blocked(resp: requests.Response) -> bool:
         return True
     return any(s in resp.text.lower() for s in BLOCK_SIGNALS)
 
+def block_reason(resp: requests.Response) -> str:
+    """Return a short human-readable reason for the block."""
+    if resp.status_code == 403:
+        return "403 Forbidden"
+    if resp.status_code == 429:
+        return "429 Too Many Requests"
+    if resp.status_code == 503:
+        return "503 Service Unavailable"
+    text = resp.text.lower()
+    for s in BLOCK_SIGNALS:
+        if s in text:
+            return s.title()
+    return f"HTTP {resp.status_code}"
+
 
 # ── Robust GET with automatic proxy rotation ──────────────────────────────────
 
@@ -120,12 +130,8 @@ def get_with_proxy(
     max_retries: int = 5,
     **kwargs,
 ) -> requests.Response:
-    """
-    GET request with automatic proxy rotation on block/error.
-    - On block (403/429/captcha): remove bad proxy → retry with next
-    - On connection error: remove bad proxy → retry with next
-    - Falls back to direct connection when proxy list is exhausted
-    """
+    last_exc = None
+
     for attempt in range(max_retries):
         proxy_dict  = proxy_manager.current_dict() if proxy_manager else None
         proxy_label = proxy_manager.current        if proxy_manager else "direct"
@@ -135,24 +141,32 @@ def get_with_proxy(
                                 timeout=timeout, **kwargs)
 
             if is_blocked(resp):
-                logger.warning(f"⛔ Blocked [{proxy_label}] HTTP {resp.status_code} → {url}")
+                reason = block_reason(resp)
+                logger.warning(f"⛔ Blocked [{proxy_label}] {reason} → {url}")
                 if proxy_manager and len(proxy_manager) > 0:
                     proxy_manager.remove_current()
                     continue
-                return resp  # no proxies left, return blocked response
+                return resp
 
-            return resp  # ✅ success
+            return resp
 
-        except (requests.exceptions.ProxyError,
-                requests.exceptions.ConnectionError,
-                requests.exceptions.Timeout) as e:
-            logger.warning(f"⚠️  Proxy error [{proxy_label}]: {e}")
+        except requests.exceptions.Timeout as e:
+            last_exc = e
+            logger.warning(f"⏱ Timeout [{proxy_label}]: {url}")
             if proxy_manager and len(proxy_manager) > 0:
                 proxy_manager.remove_current()
             else:
                 time.sleep(2)
 
-    # Last resort: direct connection (no proxy)
+        except (requests.exceptions.ProxyError,
+                requests.exceptions.ConnectionError) as e:
+            last_exc = e
+            logger.warning(f"⚠️  Connection error [{proxy_label}]: {e}")
+            if proxy_manager and len(proxy_manager) > 0:
+                proxy_manager.remove_current()
+            else:
+                time.sleep(2)
+
     logger.warning("⚠️  All proxies exhausted — falling back to direct connection.")
     return requests.get(url, headers=headers, timeout=timeout, **kwargs)
 
@@ -187,7 +201,6 @@ def scrape_hugedomains(proxy_manager: "ProxyManager | None" = None) -> list[dict
         start += 100
         time.sleep(1)
 
-    # Deduplicate
     seen, unique = set(), []
     for row in all_rows:
         if row["domain"] not in seen:
@@ -211,18 +224,40 @@ def get_date_by_label(soup: BeautifulSoup, label: str) -> str:
 
 
 def whois_lookup(domain: str, proxy_manager: "ProxyManager | None" = None) -> dict:
+    """
+    Returns dict with keys: created, expires, error (None if success).
+    """
     url = f"https://who.is/whois/{domain}"
     try:
         resp = get_with_proxy(url, headers=WHOIS_HEADERS, proxy_manager=proxy_manager)
+
+        # Blocked even after retries
+        if is_blocked(resp):
+            reason = block_reason(resp)
+            logger.error(f"  ⛔ WHOIS blocked [{domain}]: {reason}")
+            return {"created": "N/A", "expires": "N/A", "error": reason}
+
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
         created = get_date_by_label(soup, "Created")
         expires = get_date_by_label(soup, "Expires")
         logger.info(f"  ✅ WHOIS {domain} → Created: {created} | Expires: {expires}")
-        return {"created": created, "expires": expires}
+        return {"created": created, "expires": expires, "error": None}
+
+    except requests.exceptions.Timeout:
+        msg = "Timeout"
+        logger.error(f"  ⏱ WHOIS timeout [{domain}]")
+        return {"created": "N/A", "expires": "N/A", "error": msg}
+
+    except requests.exceptions.ConnectionError as e:
+        msg = f"Connection error: {e}"
+        logger.error(f"  ❌ WHOIS connection error [{domain}]: {e}")
+        return {"created": "N/A", "expires": "N/A", "error": msg}
+
     except Exception as e:
+        msg = str(e)
         logger.error(f"  ❌ WHOIS failed [{domain}]: {e}")
-        return {"created": "Error", "expires": "Error"}
+        return {"created": "N/A", "expires": "N/A", "error": msg}
 
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
@@ -236,14 +271,7 @@ def scrape_with_whois(
 
     Args:
         proxy_list: List of proxies in "IP:Port:User:Pass" format.
-                    Set to None or [] to use direct connection.
-        delay:      Seconds between WHOIS requests (be polite).
-
-    Example:
-        results = scrape_with_whois(proxy_list=[
-            "123.45.67.89:8080:user1:pass1",
-            "98.76.54.32:3128:user2:pass2",
-        ])
+        delay:      Seconds between WHOIS requests.
     """
     pm = ProxyManager(proxy_list) if proxy_list else None
     if pm:
@@ -254,12 +282,13 @@ def scrape_with_whois(
     domains = scrape_hugedomains(proxy_manager=pm)
     results = []
 
-    for i, row in enumerate(domains):
+    for row in domains:
         whois = whois_lookup(row["domain"], proxy_manager=pm)
         results.append({**row, **whois})
         if pm and len(pm) > 1:
-            pm.rotate()          # round-robin across proxies
+            pm.rotate()
         time.sleep(delay)
 
-    logger.info(f"✅ Done — {len(results)} domains scraped")
+    errors = [r for r in results if r.get("error")]
+    logger.info(f"✅ Done — {len(results)} domains | {len(errors)} WHOIS errors")
     return results
