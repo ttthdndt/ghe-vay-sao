@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import io
 import csv
 import time
-from scraper import scrape_with_whois, whois_lookup
+from scraper import scrape_with_whois
 
 app = FastAPI(title="HugeDomains Scraper API")
 
@@ -20,10 +20,14 @@ app.add_middleware(
 )
 
 # In-memory cache
-_cache: dict = {"data": [], "last_updated": None, "running": False}
+_cache: dict = {
+    "data": [],
+    "last_updated": None,
+    "running": False,
+    "error": None,        # fatal scrape-level error
+}
 
-
-# ── HTML UI ──────────────────────────────────────────────────────────────────
+# ── HTML UI ───────────────────────────────────────────────────────────────────
 
 HTML_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "index.html")
 
@@ -33,11 +37,11 @@ def index():
         return f.read()
 
 
-# ── API routes ───────────────────────────────────────────────────────────────
+# ── API routes ────────────────────────────────────────────────────────────────
 
 @app.get("/api/domains")
 def get_domains(
-    search: str = Query(default="", description="Filter by domain name"),
+    search: str = Query(default=""),
     min_price: int = Query(default=0),
     max_price: int = Query(default=99999),
 ):
@@ -52,40 +56,44 @@ def get_domains(
             return 0
 
     data = [d for d in data if min_price <= parse_price(d.get("price", "0")) <= max_price]
+
+    whois_errors = [
+        {"domain": d["domain"], "error": d["error"]}
+        for d in data if d.get("error")
+    ]
+
     return {
         "total": len(data),
         "last_updated": _cache["last_updated"],
         "running": _cache["running"],
+        "fatal_error": _cache["error"],
+        "whois_errors": whois_errors,
         "data": data,
     }
 
 
 class ScrapeRequest(BaseModel):
     proxy_list: list[str] = []
-    """
-    Optional proxies in IP:Port:User:Pass format.
-    Example: ["1.2.3.4:8080:user:pass", "5.6.7.8:3128:u:p"]
-    Leave empty [] to use direct connection.
-    """
 
 @app.post("/api/scrape")
 def trigger_scrape(body: ScrapeRequest, background_tasks: BackgroundTasks):
     if _cache["running"]:
         return {"message": "Scrape already in progress"}
+    _cache["error"] = None
     proxies = body.proxy_list if body.proxy_list else None
     background_tasks.add_task(_run_scrape, proxies)
-    return {
-        "message": "Scrape started",
-        "proxies_loaded": len(body.proxy_list),
-    }
+    return {"message": "Scrape started", "proxies_loaded": len(body.proxy_list)}
 
 
 def _run_scrape(proxy_list=None):
     _cache["running"] = True
+    _cache["error"] = None
     try:
         results = scrape_with_whois(proxy_list=proxy_list)
         _cache["data"] = results
         _cache["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+    except Exception as e:
+        _cache["error"] = str(e)
     finally:
         _cache["running"] = False
 
@@ -97,7 +105,7 @@ def export_csv(search: str = Query(default="")):
         data = [d for d in data if search.lower() in d["domain"].lower()]
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["domain", "price", "created", "expires"])
+    writer = csv.DictWriter(output, fieldnames=["domain", "price", "created", "expires", "error"])
     writer.writeheader()
     writer.writerows(data)
     output.seek(0)
@@ -111,8 +119,11 @@ def export_csv(search: str = Query(default="")):
 
 @app.get("/api/status")
 def status():
+    errors = [d for d in _cache["data"] if d.get("error")]
     return {
         "total_domains": len(_cache["data"]),
+        "whois_errors": len(errors),
         "last_updated": _cache["last_updated"],
         "running": _cache["running"],
+        "fatal_error": _cache["error"],
     }
