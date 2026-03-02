@@ -111,6 +111,40 @@
     }
     .btn-export:hover { border-color: var(--accent); color: var(--accent); }
 
+    .proxy-section {
+      margin-bottom: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .proxy-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 8px;
+    }
+    .proxy-label span { color: var(--accent); }
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.8rem;
+      padding: 10px 12px;
+      border-radius: 6px;
+      resize: vertical;
+      min-height: 90px;
+      outline: none;
+      line-height: 1.6;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: #333; }
+    .proxy-count { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+
     .meta {
       font-size: 0.78rem;
       color: var(--muted);
@@ -224,6 +258,12 @@
 
 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
 
+<div class="proxy-section">
+  <div class="proxy-label">🔌 Proxy list <span>(optional)</span> — one per line: <code>IP:Port:User:Pass</code></div>
+  <textarea id="proxyInput" placeholder="123.45.67.89:8080:user1:pass1&#10;98.76.54.32:3128:user2:pass2&#10;(leave empty to use direct connection)" oninput="updateProxyCount()"></textarea>
+  <div class="proxy-count" id="proxyCount">0 proxies loaded</div>
+</div>
+
 <div class="controls">
   <input type="text" id="searchInput" placeholder="Search domain…" oninput="applyFilters()" />
   <input type="number" id="minPrice" placeholder="Min $" oninput="applyFilters()" />
@@ -327,8 +367,27 @@
   }
 
   // ── Scrape trigger ────────────────────────────────────────────────────────
+  function getProxies() {
+    const raw = document.getElementById('proxyInput').value.trim();
+    if (!raw) return [];
+    return raw.split('
+').map(l => l.trim()).filter(Boolean);
+  }
+
+  function updateProxyCount() {
+    const count = getProxies().length;
+    document.getElementById('proxyCount').textContent =
+      count === 0 ? '0 proxies — using direct connection'
+                  : count + ' prox' + (count === 1 ? 'y' : 'ies') + ' loaded';
+  }
+
   async function triggerScrape() {
-    await fetch('/api/scrape', { method: 'POST' });
+    const proxies = getProxies();
+    await fetch('/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proxy_list: proxies }),
+    });
     startPolling();
   }
 
