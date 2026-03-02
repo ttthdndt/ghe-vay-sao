@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import io
 import csv
 import time
@@ -18,7 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory cache: { "data": [...], "last_updated": timestamp }
+# In-memory cache
 _cache: dict = {"data": [], "last_updated": None, "running": False}
 
 
@@ -41,12 +42,9 @@ def get_domains(
     max_price: int = Query(default=99999),
 ):
     data = _cache["data"]
-
-    # Filter by search
     if search:
         data = [d for d in data if search.lower() in d["domain"].lower()]
 
-    # Filter by price (strip $ and commas)
     def parse_price(p: str) -> int:
         try:
             return int(p.replace("$", "").replace(",", ""))
@@ -54,7 +52,6 @@ def get_domains(
             return 0
 
     data = [d for d in data if min_price <= parse_price(d.get("price", "0")) <= max_price]
-
     return {
         "total": len(data),
         "last_updated": _cache["last_updated"],
@@ -63,18 +60,30 @@ def get_domains(
     }
 
 
+class ScrapeRequest(BaseModel):
+    proxy_list: list[str] = []
+    """
+    Optional proxies in IP:Port:User:Pass format.
+    Example: ["1.2.3.4:8080:user:pass", "5.6.7.8:3128:u:p"]
+    Leave empty [] to use direct connection.
+    """
+
 @app.post("/api/scrape")
-def trigger_scrape(background_tasks: BackgroundTasks):
+def trigger_scrape(body: ScrapeRequest, background_tasks: BackgroundTasks):
     if _cache["running"]:
         return {"message": "Scrape already in progress"}
-    background_tasks.add_task(_run_scrape)
-    return {"message": "Scrape started"}
+    proxies = body.proxy_list if body.proxy_list else None
+    background_tasks.add_task(_run_scrape, proxies)
+    return {
+        "message": "Scrape started",
+        "proxies_loaded": len(body.proxy_list),
+    }
 
 
-def _run_scrape():
+def _run_scrape(proxy_list=None):
     _cache["running"] = True
     try:
-        results = scrape_with_whois()
+        results = scrape_with_whois(proxy_list=proxy_list)
         _cache["data"] = results
         _cache["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
     finally:
