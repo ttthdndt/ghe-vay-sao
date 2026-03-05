@@ -81,20 +81,25 @@ def get_domains(
 
 # ── Scrape trigger ────────────────────────────────────────────────────────────
 
+from pydantic import BaseModel
+
+class ScrapeRequest(BaseModel):
+    proxies: list[str] = []   # list of "IP:PORT:USER:PASS" strings
+
 @app.post("/api/scrape")
-def trigger_scrape(background_tasks: BackgroundTasks):
+def trigger_scrape(body: ScrapeRequest, background_tasks: BackgroundTasks):
     if _cache["running"]:
         return {"message": "Scrape already in progress"}
     _logs.clear()
-    background_tasks.add_task(_run_scrape)
+    background_tasks.add_task(_run_scrape, body.proxies)
     return {"message": "Scrape started"}
 
 
-def _run_scrape():
+def _run_scrape(proxies: list[str] = None):
     _cache["running"] = True
     _cache["data"] = []
     try:
-        results = scrape_with_whois(log=_emit, delay=1.2)
+        results = scrape_with_whois(log=_emit, delay=1.2, proxies=proxies or [])
         _cache["data"] = results
         _cache["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
     except Exception as e:
