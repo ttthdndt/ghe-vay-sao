@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import time
+import random
 from typing import Callable
 
 HEADERS = {
@@ -31,6 +32,22 @@ BASE_PARAMS = dict(
 )
 
 DOMAIN_LIMIT = 50
+
+
+# ── Proxy helpers ─────────────────────────────────────────────────────────────
+
+def parse_proxy(proxy_str: str) -> dict:
+    """Parse 'IP:PORT:USER:PASS' into a requests-compatible proxy dict."""
+    ip, port, user, pwd = proxy_str.strip().split(":")
+    url = f"http://{user}:{pwd}@{ip}:{port}"
+    return {"http": url, "https": url}
+
+
+def random_proxy(proxies: list[str]) -> dict | None:
+    """Pick a random proxy from the list and return a proxy dict."""
+    if not proxies:
+        return None
+    return parse_proxy(random.choice(proxies))
 
 
 # ── HugeDomains ───────────────────────────────────────────────────────────────
@@ -80,30 +97,41 @@ def get_date_by_label(soup: BeautifulSoup, label: str) -> str:
     return "N/A"
 
 
-def whois_lookup(domain: str, log: Callable = print) -> dict:
+def whois_lookup(domain: str, proxies: list[str] = None, log: Callable = print) -> dict:
     url = f"https://who.is/whois/{domain}"
+    proxy = random_proxy(proxies) if proxies else None
+    proxy_label = list(proxy.values())[0].split("@")[-1] if proxy else "direct"
     try:
-        resp = requests.get(url, headers=WHOIS_HEADERS, timeout=12)
+        resp = requests.get(url, headers=WHOIS_HEADERS, proxies=proxy, timeout=12)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
         created = get_date_by_label(soup, "Created")
         expires = get_date_by_label(soup, "Expires")
-        log(f"[WHOIS] ✓ {domain} → Created: {created} | Expires: {expires}")
+        log(f"[WHOIS] ✓ {domain} [{proxy_label}] → Created: {created} | Expires: {expires}")
         return {"created": created, "expires": expires}
     except Exception as e:
-        log(f"[WHOIS] ✗ {domain} → {e}")
+        log(f"[WHOIS] ✗ {domain} [{proxy_label}] → {e}")
         return {"created": "Error", "expires": "Error"}
 
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 
-def scrape_with_whois(log: Callable = print, delay: float = 1.2) -> list[dict]:
+def scrape_with_whois(
+    log: Callable = print,
+    delay: float = 1.2,
+    proxies: list[str] = None,
+) -> list[dict]:
+    if proxies:
+        log(f"[Proxy] {len(proxies)} proxies loaded — picking randomly per request.")
+    else:
+        log("[Proxy] No proxies configured — using direct connection.")
+
     domains = scrape_hugedomains(log=log)
     results = []
     total = len(domains)
     for i, row in enumerate(domains, 1):
         log(f"[{i}/{total}] {row['domain']} — fetching WHOIS...")
-        whois = whois_lookup(row["domain"], log=log)
+        whois = whois_lookup(row["domain"], proxies=proxies, log=log)
         results.append({**row, **whois})
         time.sleep(delay)
     log(f"[Done] ✓ {len(results)} domains collected.")
