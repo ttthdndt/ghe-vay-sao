@@ -74,8 +74,6 @@ def get_domains(
 
 class ScrapeRequest(BaseModel):
     proxy_list: list[str] = []
-    domain_limit: int = 30          # how many domains to fetch from HugeDomains
-    min_age_years: float = 10.0     # only keep domains with expires-created >= this
 
 @app.post("/api/scrape")
 def trigger_scrape(body: ScrapeRequest, background_tasks: BackgroundTasks):
@@ -83,24 +81,15 @@ def trigger_scrape(body: ScrapeRequest, background_tasks: BackgroundTasks):
         return {"message": "Scrape already in progress"}
     _cache["error"] = None
     proxies = body.proxy_list if body.proxy_list else None
-    background_tasks.add_task(_run_scrape, proxies, body.domain_limit, body.min_age_years)
-    return {
-        "message": "Scrape started",
-        "proxies_loaded": len(body.proxy_list),
-        "domain_limit": body.domain_limit,
-        "min_age_years": body.min_age_years,
-    }
+    background_tasks.add_task(_run_scrape, proxies)
+    return {"message": "Scrape started", "proxies_loaded": len(body.proxy_list)}
 
 
-def _run_scrape(proxy_list=None, domain_limit=30, min_age_years=10.0):
+def _run_scrape(proxy_list=None):
     _cache["running"] = True
     _cache["error"] = None
     try:
-        results = scrape_with_whois(
-            proxy_list=proxy_list,
-            domain_limit=domain_limit,
-            min_age_years=min_age_years,
-        )
+        results = scrape_with_whois(proxy_list=proxy_list)
         _cache["data"] = results
         _cache["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
     except Exception as e:
@@ -116,7 +105,7 @@ def export_csv(search: str = Query(default="")):
         data = [d for d in data if search.lower() in d["domain"].lower()]
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["domain", "price", "created", "expires", "age_years", "error"])
+    writer = csv.DictWriter(output, fieldnames=["domain", "price", "created", "expires", "error"])
     writer.writeheader()
     writer.writerows(data)
     output.seek(0)
