@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import re
 import time
 import random
+import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
 HEADERS = {
@@ -36,10 +38,51 @@ DOMAIN_LIMIT = 50
 
 # ── Proxy helpers ─────────────────────────────────────────────────────────────
 
-def parse_proxy(proxy_str: str) -> dict:
-    """Parse IP:PORT:USER:PASS. http:// is correct for HTTP CONNECT proxies
-    that tunnel HTTPS — the proxy protocol is HTTP, not HTTPS.
+def tcp_check(ip: str, port: int, timeout: float = 5.0) -> bool:
+    """Raw TCP connect test — same approach as the notebook socket check."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect((ip, port))
+        return True
+    except Exception:
+        return False
+
+
+def check_proxies(proxy_list: list[str], log: Callable = print) -> list[str]:
     """
+    TCP-test all proxies in parallel. Return only the ones that connect.
+    """
+    if not proxy_list:
+        return []
+
+    log(f"[Proxy] Testing {len(proxy_list)} proxies via TCP…")
+
+    def test(proxy_str: str):
+        parts = proxy_str.strip().split(":")
+        ip, port = parts[0], int(parts[1])
+        ok = tcp_check(ip, port)
+        return proxy_str, ok
+
+    alive = []
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = {ex.submit(test, p): p for p in proxy_list}
+        for f in as_completed(futures):
+            proxy_str, ok = f.result()
+            parts = proxy_str.split(":")
+            label = f"{parts[0]}:{parts[1]}"
+            if ok:
+                log(f"[Proxy] ✓ {label} — alive")
+                alive.append(proxy_str)
+            else:
+                log(f"[Proxy] ✗ {label} — dead (TCP failed)")
+
+    log(f"[Proxy] {len(alive)}/{len(proxy_list)} proxies alive.")
+    return alive
+
+
+def parse_proxy(proxy_str: str) -> dict:
+    """Parse IP:PORT:USER:PASS → requests proxy dict."""
     parts = proxy_str.strip().split(":")
     ip, port, user, pwd = parts[0], parts[1], parts[2], parts[3]
     url = f"http://{user}:{pwd}@{ip}:{port}"
@@ -47,7 +90,6 @@ def parse_proxy(proxy_str: str) -> dict:
 
 
 def random_proxy(proxies: list[str]) -> dict | None:
-    """Pick a random proxy from the list and return a proxy dict."""
     if not proxies:
         return None
     return parse_proxy(random.choice(proxies))
@@ -102,7 +144,6 @@ def get_date_by_label(soup: BeautifulSoup, label: str) -> str:
 
 def whois_lookup(domain: str, proxies: list[str] = None, log: Callable = print) -> dict:
     url = f"https://who.is/whois/{domain}"
-    # Try up to 3 different random proxies before giving up
     attempts = min(3, len(proxies)) if proxies else 1
     for attempt in range(attempts):
         proxy = random_proxy(proxies) if proxies else None
@@ -129,18 +170,25 @@ def scrape_with_whois(
     delay: float = 1.2,
     proxies: list[str] = None,
 ) -> list[dict]:
+    # Step 1 — TCP-test proxies, keep only alive ones
     if proxies:
-        log(f"[Proxy] {len(proxies)} proxies loaded — picking randomly per request.")
+        proxies = check_proxies(proxies, log=log)
+        if not proxies:
+            log("[Proxy] ⚠ No alive proxies found — falling back to direct connection.")
     else:
         log("[Proxy] No proxies configured — using direct connection.")
 
+    # Step 2 — Scrape domain list
     domains = scrape_hugedomains(log=log)
     results = []
     total = len(domains)
+
+    # Step 3 — WHOIS lookup per domain
     for i, row in enumerate(domains, 1):
         log(f"[{i}/{total}] {row['domain']} — fetching WHOIS...")
         whois = whois_lookup(row["domain"], proxies=proxies, log=log)
         results.append({**row, **whois})
         time.sleep(delay)
+
     log(f"[Done] ✓ {len(results)} domains collected.")
     return results
