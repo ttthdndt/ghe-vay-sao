@@ -4,11 +4,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import io
 import csv
 import time
-from scraper import scrape_with_whois
+from scraper import scrape_with_whois, whois_lookup
 
 app = FastAPI(title="HugeDomains Scraper API")
 
@@ -19,15 +18,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory cache
-_cache: dict = {
-    "data": [],
-    "last_updated": None,
-    "running": False,
-    "error": None,        # fatal scrape-level error
-}
+# In-memory cache: { "data": [...], "last_updated": timestamp }
+_cache: dict = {"data": [], "last_updated": None, "running": False}
 
-# ── HTML UI ───────────────────────────────────────────────────────────────────
+
+# ── HTML UI ──────────────────────────────────────────────────────────────────
 
 HTML_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "index.html")
 
@@ -37,18 +32,21 @@ def index():
         return f.read()
 
 
-# ── API routes ────────────────────────────────────────────────────────────────
+# ── API routes ───────────────────────────────────────────────────────────────
 
 @app.get("/api/domains")
 def get_domains(
-    search: str = Query(default=""),
+    search: str = Query(default="", description="Filter by domain name"),
     min_price: int = Query(default=0),
     max_price: int = Query(default=99999),
 ):
     data = _cache["data"]
+
+    # Filter by search
     if search:
         data = [d for d in data if search.lower() in d["domain"].lower()]
 
+    # Filter by price (strip $ and commas)
     def parse_price(p: str) -> int:
         try:
             return int(p.replace("$", "").replace(",", ""))
@@ -57,54 +55,28 @@ def get_domains(
 
     data = [d for d in data if min_price <= parse_price(d.get("price", "0")) <= max_price]
 
-    whois_errors = [
-        {"domain": d["domain"], "error": d["error"]}
-        for d in data if d.get("error")
-    ]
-
     return {
         "total": len(data),
         "last_updated": _cache["last_updated"],
         "running": _cache["running"],
-        "fatal_error": _cache["error"],
-        "whois_errors": whois_errors,
         "data": data,
     }
 
 
-class ScrapeRequest(BaseModel):
-    proxy_list: list[str] = []
-    domain_limit: int = 30          # how many domains to fetch from HugeDomains
-    min_age_years: float = 10.0     # only keep domains with expires-created >= this
-
 @app.post("/api/scrape")
-def trigger_scrape(body: ScrapeRequest, background_tasks: BackgroundTasks):
+def trigger_scrape(background_tasks: BackgroundTasks):
     if _cache["running"]:
         return {"message": "Scrape already in progress"}
-    _cache["error"] = None
-    proxies = body.proxy_list if body.proxy_list else None
-    background_tasks.add_task(_run_scrape, proxies, body.domain_limit, body.min_age_years)
-    return {
-        "message": "Scrape started",
-        "proxies_loaded": len(body.proxy_list),
-        "domain_limit": body.domain_limit,
-        "min_age_years": body.min_age_years,
-    }
+    background_tasks.add_task(_run_scrape)
+    return {"message": "Scrape started"}
 
 
-def _run_scrape(proxy_list=None, domain_limit=30, min_age_years=10.0):
+def _run_scrape():
     _cache["running"] = True
-    _cache["error"] = None
     try:
-        results = scrape_with_whois(
-            proxy_list=proxy_list,
-            domain_limit=domain_limit,
-            min_age_years=min_age_years,
-        )
+        results = scrape_with_whois()
         _cache["data"] = results
         _cache["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
-    except Exception as e:
-        _cache["error"] = str(e)
     finally:
         _cache["running"] = False
 
@@ -116,7 +88,7 @@ def export_csv(search: str = Query(default="")):
         data = [d for d in data if search.lower() in d["domain"].lower()]
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["domain", "price", "created", "expires", "age_years", "error"])
+    writer = csv.DictWriter(output, fieldnames=["domain", "price", "created", "expires"])
     writer.writeheader()
     writer.writerows(data)
     output.seek(0)
@@ -130,11 +102,8 @@ def export_csv(search: str = Query(default="")):
 
 @app.get("/api/status")
 def status():
-    errors = [d for d in _cache["data"] if d.get("error")]
     return {
         "total_domains": len(_cache["data"]),
-        "whois_errors": len(errors),
         "last_updated": _cache["last_updated"],
         "running": _cache["running"],
-        "fatal_error": _cache["error"],
     }
