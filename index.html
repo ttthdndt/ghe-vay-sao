@@ -264,8 +264,6 @@
   <input type="text" id="searchInput" placeholder="Search domain…" oninput="applyFilters()" />
   <input type="number" id="minPrice" placeholder="Min $" oninput="applyFilters()" />
   <input type="number" id="maxPrice" placeholder="Max $" oninput="applyFilters()" />
-  <input type="number" id="domainLimit" value="30" min="1" max="500" placeholder="Limit" title="Max domains to scrape from HugeDomains" style="width:90px" />
-  <input type="number" id="minAgeYears" value="10" min="1" max="50" step="0.5" placeholder="Min yrs" title="Min age: expires - created >= N years" style="width:90px" />
   <button class="btn-scrape" id="scrapeBtn" onclick="triggerScrape()">▶ Run Scrape</button>
   <button class="btn-export" onclick="exportCSV()">↓ Export CSV</button>
   <div class="meta" id="metaInfo">No data loaded</div>
@@ -279,12 +277,11 @@
         <th onclick="sortBy('price')">Price <span class="sort-arrow" id="arrow-price">↕</span></th>
         <th onclick="sortBy('created')">Created <span class="sort-arrow" id="arrow-created">↕</span></th>
         <th onclick="sortBy('expires')">Expires <span class="sort-arrow" id="arrow-expires">↕</span></th>
-        <th onclick="sortBy('age_years')">Age (yrs) <span class="sort-arrow" id="arrow-age_years">↕</span></th>
         <th>WHOIS Status</th>
       </tr>
     </thead>
     <tbody id="tableBody">
-      <tr><td colspan="6" class="empty">Click "Run Scrape" to fetch domains.</td></tr>
+      <tr><td colspan="5" class="empty">Click "Run Scrape" to fetch domains.</td></tr>
     </tbody>
   </table>
 </div>
@@ -331,7 +328,7 @@
   function renderTable(data) {
     const tbody = document.getElementById('tableBody');
     if (!data.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">No domains match your filters.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">No domains match your filters.</td></tr>`;
       return;
     }
     tbody.innerHTML = data.map(d => {
@@ -345,7 +342,6 @@
           <td class="price-cell">${d.price}</td>
           <td class="date-cell ${d.created === 'N/A' ? 'na' : ''}">${d.created}</td>
           <td class="date-cell ${d.expires === 'N/A' ? 'na' : ''}">${d.expires}</td>
-          <td class="date-cell ${!d.age_years ? 'na' : ''}" style="${d.age_years >= 10 ? 'color:#00e5a0' : ''}">${d.age_years !== null && d.age_years !== undefined ? d.age_years + ' yr' : 'N/A'}</td>
           ${statusCell}
         </tr>`;
     }).join('');
@@ -434,12 +430,10 @@
     document.getElementById('warnBanner').classList.remove('visible');
 
     const proxies = getProxies();
-    const domainLimit  = parseInt(document.getElementById('domainLimit').value)  || 30;
-    const minAgeYears  = parseFloat(document.getElementById('minAgeYears').value) || 10;
     await fetch('/api/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proxy_list: proxies, domain_limit: domainLimit, min_age_years: minAgeYears }),
+      body: JSON.stringify({ proxy_list: proxies }),
     });
     startPolling();
   }
