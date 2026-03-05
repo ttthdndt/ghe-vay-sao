@@ -67,7 +67,7 @@
       flex-wrap: wrap;
       align-items: center;
     }
-    input {
+    input, textarea {
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
@@ -78,9 +78,48 @@
       outline: none;
       transition: border-color .15s;
     }
-    input:focus { border-color: var(--accent); }
+    input:focus, textarea:focus { border-color: var(--accent); }
     input[type="text"]   { width: 240px; }
     input[type="number"] { width: 100px; }
+
+    /* proxy box */
+    .btn-proxy-toggle {
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-proxy-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+    #proxyPanel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .proxy-panel { display: flex; flex-direction: column; }
+    .proxy-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .proxy-hint { color: #383838; margin-left: 8px; text-transform: none; }
+    .proxy-count { color: var(--accent); }
+    #proxyInput {
+      width: 100%;
+      height: 90px;
+      resize: vertical;
+      line-height: 1.65;
+      border: none;
+      border-radius: 0;
+      padding: 10px 14px;
+    }
 
     button {
       cursor: pointer;
