@@ -2,11 +2,18 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import time
-from typing import Optional
+from typing import Callable
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
+}
+
+WHOIS_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://who.is/",
 }
 
 BASE_URL = "https://www.hugedomains.com/domain_search.cfm"
@@ -18,11 +25,15 @@ BASE_PARAMS = dict(
     length_start=8,
     length_end=10,
     highlightbg=0,
-    maxrows=100,
+    maxrows=50,
     catsearch=0,
     sort="PriceAsc",
 )
 
+DOMAIN_LIMIT = 50
+
+
+# ── HugeDomains ───────────────────────────────────────────────────────────────
 
 def parse_hugedomains_page(soup: BeautifulSoup) -> list[dict]:
     rows = []
@@ -36,41 +47,26 @@ def parse_hugedomains_page(soup: BeautifulSoup) -> list[dict]:
     return rows
 
 
-def scrape_hugedomains() -> list[dict]:
-    all_rows = []
-    start = 1
-    while True:
-        r = requests.get(
-            BASE_URL, params={**BASE_PARAMS, "start": start}, headers=HEADERS, timeout=15
-        )
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "lxml")
-        rows = parse_hugedomains_page(soup)
-        all_rows.extend(rows)
-        if not rows or not soup.find("a", string=re.compile(r"(?i)next")):
-            break
-        start += 100
-        time.sleep(1)
+def scrape_hugedomains(log: Callable = print) -> list[dict]:
+    log(f"[HugeDomains] Fetching first {DOMAIN_LIMIT} domains...")
+    r = requests.get(BASE_URL, params={**BASE_PARAMS, "start": 1}, headers=HEADERS, timeout=15)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "lxml")
+    rows = parse_hugedomains_page(soup)
 
-    # Deduplicate
-    seen = set()
-    unique = []
-    for row in all_rows:
+    seen, unique = set(), []
+    for row in rows:
         if row["domain"] not in seen:
             seen.add(row["domain"])
             unique.append(row)
+        if len(unique) >= DOMAIN_LIMIT:
+            break
+
+    log(f"[HugeDomains] Got {len(unique)} unique domains.")
     return unique
 
 
-# ── WHOIS ────────────────────────────────────────────────────────────────────
-
-WHOIS_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://who.is/",
-}
-
+# ── WHOIS ─────────────────────────────────────────────────────────────────────
 
 def get_date_by_label(soup: BeautifulSoup, label: str) -> str:
     """Mimics XPath: //dt[text()="{label}"]/parent::div/dd"""
@@ -84,25 +80,31 @@ def get_date_by_label(soup: BeautifulSoup, label: str) -> str:
     return "N/A"
 
 
-def whois_lookup(domain: str) -> dict:
+def whois_lookup(domain: str, log: Callable = print) -> dict:
     url = f"https://who.is/whois/{domain}"
     try:
         resp = requests.get(url, headers=WHOIS_HEADERS, timeout=12)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
-        return {
-            "created": get_date_by_label(soup, "Created"),
-            "expires": get_date_by_label(soup, "Expires"),
-        }
-    except Exception:
+        created = get_date_by_label(soup, "Created")
+        expires = get_date_by_label(soup, "Expires")
+        log(f"[WHOIS] ✓ {domain} → Created: {created} | Expires: {expires}")
+        return {"created": created, "expires": expires}
+    except Exception as e:
+        log(f"[WHOIS] ✗ {domain} → {e}")
         return {"created": "Error", "expires": "Error"}
 
 
-def scrape_with_whois(delay: float = 1.2) -> list[dict]:
-    domains = scrape_hugedomains()
+# ── Full pipeline ─────────────────────────────────────────────────────────────
+
+def scrape_with_whois(log: Callable = print, delay: float = 1.2) -> list[dict]:
+    domains = scrape_hugedomains(log=log)
     results = []
-    for row in domains:
-        whois = whois_lookup(row["domain"])
+    total = len(domains)
+    for i, row in enumerate(domains, 1):
+        log(f"[{i}/{total}] {row['domain']} — fetching WHOIS...")
+        whois = whois_lookup(row["domain"], log=log)
         results.append({**row, **whois})
         time.sleep(delay)
+    log(f"[Done] ✓ {len(results)} domains collected.")
     return results
