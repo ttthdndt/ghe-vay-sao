@@ -37,8 +37,11 @@ DOMAIN_LIMIT = 50
 # ── Proxy helpers ─────────────────────────────────────────────────────────────
 
 def parse_proxy(proxy_str: str) -> dict:
-    """Parse 'IP:PORT:USER:PASS' into a requests-compatible proxy dict."""
-    ip, port, user, pwd = proxy_str.strip().split(":")
+    """Parse IP:PORT:USER:PASS. http:// is correct for HTTP CONNECT proxies
+    that tunnel HTTPS — the proxy protocol is HTTP, not HTTPS.
+    """
+    parts = proxy_str.strip().split(":")
+    ip, port, user, pwd = parts[0], parts[1], parts[2], parts[3]
     url = f"http://{user}:{pwd}@{ip}:{port}"
     return {"http": url, "https": url}
 
@@ -99,19 +102,24 @@ def get_date_by_label(soup: BeautifulSoup, label: str) -> str:
 
 def whois_lookup(domain: str, proxies: list[str] = None, log: Callable = print) -> dict:
     url = f"https://who.is/whois/{domain}"
-    proxy = random_proxy(proxies) if proxies else None
-    proxy_label = list(proxy.values())[0].split("@")[-1] if proxy else "direct"
-    try:
-        resp = requests.get(url, headers=WHOIS_HEADERS, proxies=proxy, timeout=12)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "lxml")
-        created = get_date_by_label(soup, "Created")
-        expires = get_date_by_label(soup, "Expires")
-        log(f"[WHOIS] ✓ {domain} [{proxy_label}] → Created: {created} | Expires: {expires}")
-        return {"created": created, "expires": expires}
-    except Exception as e:
-        log(f"[WHOIS] ✗ {domain} [{proxy_label}] → {e}")
-        return {"created": "Error", "expires": "Error"}
+    # Try up to 3 different random proxies before giving up
+    attempts = min(3, len(proxies)) if proxies else 1
+    for attempt in range(attempts):
+        proxy = random_proxy(proxies) if proxies else None
+        proxy_label = list(proxy.values())[0].split("@")[-1] if proxy else "direct"
+        try:
+            resp = requests.get(url, headers=WHOIS_HEADERS, proxies=proxy, timeout=12)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "lxml")
+            created = get_date_by_label(soup, "Created")
+            expires = get_date_by_label(soup, "Expires")
+            log(f"[WHOIS] ✓ {domain} [{proxy_label}] → Created: {created} | Expires: {expires}")
+            return {"created": created, "expires": expires}
+        except Exception as e:
+            log(f"[WHOIS] ✗ {domain} [{proxy_label}] attempt {attempt+1}/{attempts} → {e}")
+            if attempt < attempts - 1:
+                time.sleep(0.5)
+    return {"created": "Error", "expires": "Error"}
 
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
