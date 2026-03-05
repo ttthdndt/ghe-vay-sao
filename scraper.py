@@ -185,31 +185,17 @@ def parse_hugedomains_page(soup: BeautifulSoup) -> list[dict]:
     return rows
 
 
-def scrape_hugedomains(
-    proxy_manager: "ProxyManager | None" = None,
-    limit: int = 30,
-) -> list[dict]:
-    """
-    Scrape HugeDomains search results.
-    Args:
-        limit: Max domains to return (default 30). Set 0 for no limit.
-    """
+def scrape_hugedomains(proxy_manager: "ProxyManager | None" = None) -> list[dict]:
     all_rows, start = [], 1
     while True:
-        logger.info(f"Fetching HugeDomains records {start}\u2013{start+99}\u2026")
+        logger.info(f"Fetching HugeDomains records {start}–{start+99}…")
         resp = get_with_proxy(BASE_URL, headers=HEADERS, proxy_manager=proxy_manager,
                               params={**BASE_PARAMS, "start": start})
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
         rows = parse_hugedomains_page(soup)
-        logger.info(f"  \u2192 {len(rows)} domains found")
+        logger.info(f"  → {len(rows)} domains found")
         all_rows.extend(rows)
-
-        # Stop early once we have enough
-        if limit and len(all_rows) >= limit:
-            logger.info(f"  \u2702\ufe0f  Reached limit of {limit} \u2014 stopping early")
-            break
-
         if not rows or not soup.find("a", string=re.compile(r"(?i)next")):
             break
         start += 100
@@ -220,11 +206,6 @@ def scrape_hugedomains(
         if row["domain"] not in seen:
             seen.add(row["domain"])
             unique.append(row)
-
-    if limit:
-        unique = unique[:limit]
-
-    logger.info(f"  \U0001f4cb Total domains to process: {len(unique)}")
     return unique
 
 
@@ -281,76 +262,33 @@ def whois_lookup(domain: str, proxy_manager: "ProxyManager | None" = None) -> di
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 
-# ── Age filter ───────────────────────────────────────────────────────────────
-
-def parse_date_safe(date_str: str):
-    """Parse a date string into a date object. Returns None if unparseable."""
-    from datetime import date
-    import re as _re
-    if not date_str or date_str in ("N/A", "Error"):
-        return None
-    # Try ISO format: 2005-03-14 or 2005-03-14T00:00:00Z
-    m = _re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str.strip())
-    if m:
-        try:
-            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        except ValueError:
-            return None
-    return None
-
-
-def domain_age_years(created: str, expires: str) -> float | None:
-    """Return expires - created in years, or None if dates can't be parsed."""
-    d1 = parse_date_safe(created)
-    d2 = parse_date_safe(expires)
-    if d1 and d2 and d2 > d1:
-        return (d2 - d1).days / 365.25
-    return None
-
-
-# ── Full pipeline ─────────────────────────────────────────────────────────────
-
 def scrape_with_whois(
     proxy_list: list[str] | None = None,
     delay: float = 1.2,
-    domain_limit: int = 30,
-    min_age_years: float = 10.0,
 ) -> list[dict]:
     """
-    Full pipeline: scrape HugeDomains → enrich with WHOIS dates → filter by age.
+    Full pipeline: scrape HugeDomains → enrich with WHOIS dates.
 
     Args:
-        proxy_list:     Proxies in "IP:Port:User:Pass" format. None = direct.
-        delay:          Seconds between WHOIS requests.
-        domain_limit:   Max domains to scrape from HugeDomains (default 30).
-        min_age_years:  Only keep domains where expires - created >= this value (default 10).
+        proxy_list: List of proxies in "IP:Port:User:Pass" format.
+        delay:      Seconds between WHOIS requests.
     """
     pm = ProxyManager(proxy_list) if proxy_list else None
     if pm:
-        logger.info(f"\U0001f310 Proxy pool loaded: {len(pm)} proxies")
+        logger.info(f"🌐 Proxy pool loaded: {len(pm)} proxies")
     else:
-        logger.info("\U0001f310 No proxies \u2014 using direct connection")
+        logger.info("🌐 No proxies — using direct connection")
 
-    domains = scrape_hugedomains(proxy_manager=pm, limit=domain_limit)
-    all_results = []
+    domains = scrape_hugedomains(proxy_manager=pm)
+    results = []
 
     for row in domains:
         whois = whois_lookup(row["domain"], proxy_manager=pm)
-        age = domain_age_years(whois["created"], whois["expires"])
-        entry = {**row, **whois, "age_years": round(age, 1) if age is not None else None}
-        all_results.append(entry)
+        results.append({**row, **whois})
         if pm and len(pm) > 1:
             pm.rotate()
         time.sleep(delay)
 
-    # Filter: keep only domains with age >= min_age_years
-    qualified = [r for r in all_results if r["age_years"] is not None and r["age_years"] >= min_age_years]
-    skipped   = len(all_results) - len(qualified)
-
-    errors = [r for r in qualified if r.get("error")]
-    logger.info(
-        f"\u2705 Done \u2014 {len(all_results)} scraped | "
-        f"{len(qualified)} passed \u2265{min_age_years}yr filter | "
-        f"{skipped} skipped | {len(errors)} WHOIS errors"
-    )
-    return qualified
+    errors = [r for r in results if r.get("error")]
+    logger.info(f"✅ Done — {len(results)} domains | {len(errors)} WHOIS errors")
+    return results
