@@ -21,7 +21,7 @@ WHOIS_HEADERS = {
 
 BASE_URL = "https://www.hugedomains.com/domain_search.cfm"
 BASE_PARAMS = dict(
-    domain_name="sport",
+    domain_name="sport",  # default; overridden at runtime via keyword arg
     anchor="right",
     price_from=15,
     price_to=1000,
@@ -109,9 +109,9 @@ def parse_hugedomains_page(soup: BeautifulSoup) -> list[dict]:
     return rows
 
 
-def scrape_hugedomains(log: Callable = print) -> list[dict]:
-    log(f"[HugeDomains] Fetching first {DOMAIN_LIMIT} domains...")
-    r = requests.get(BASE_URL, params={**BASE_PARAMS, "start": 1}, headers=HEADERS, timeout=15)
+def scrape_hugedomains(keyword: str = "sport", log: Callable = print) -> list[dict]:
+    log(f"[HugeDomains] Fetching first {DOMAIN_LIMIT} domains for keyword: {keyword!r}...")
+    r = requests.get(BASE_URL, params={**BASE_PARAMS, "domain_name": keyword, "start": 1}, headers=HEADERS, timeout=15)
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "lxml")
     rows = parse_hugedomains_page(soup)
@@ -167,6 +167,7 @@ def whois_lookup(domain: str, proxies: list[str] = None, log: Callable = print) 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 
 def scrape_with_whois(
+    keyword: str = "sport",
     log: Callable = print,
     delay: float = 1.2,
     proxies: list[str] = None,
@@ -180,7 +181,7 @@ def scrape_with_whois(
         log("[Proxy] No proxies configured — using direct connection.")
 
     # Step 2 — Scrape domain list
-    domains = scrape_hugedomains(log=log)
+    domains = scrape_hugedomains(keyword=keyword, log=log)
     results = []
     total = len(domains)
 

@@ -85,21 +85,22 @@ from pydantic import BaseModel
 
 class ScrapeRequest(BaseModel):
     proxies: list[str] = []   # list of "IP:PORT:USER:PASS" strings
+    keyword: str = "sport"    # search keyword for HugeDomains
 
 @app.post("/api/scrape")
 def trigger_scrape(body: ScrapeRequest, background_tasks: BackgroundTasks):
     if _cache["running"]:
         return {"message": "Scrape already in progress"}
     _logs.clear()
-    background_tasks.add_task(_run_scrape, body.proxies)
+    background_tasks.add_task(_run_scrape, body.proxies, body.keyword)
     return {"message": "Scrape started"}
 
 
-def _run_scrape(proxies: list[str] = None):
+def _run_scrape(proxies: list[str] = None, keyword: str = "sport"):
     _cache["running"] = True
     _cache["data"] = []
     try:
-        results = scrape_with_whois(log=_emit, delay=1.2, proxies=proxies or [])
+        results = scrape_with_whois(keyword=keyword, log=_emit, delay=1.2, proxies=proxies or [])
         _cache["data"] = results
         _cache["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
     except Exception as e:
@@ -170,7 +171,7 @@ def export_csv(search: str = Query(default="")):
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=hugedomains_sport.csv"},
+        headers={"Content-Disposition": "attachment; filename=hugedomains_domains.csv"},
     )
 
 

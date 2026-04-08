@@ -315,6 +315,7 @@
 </header>
 
 <div class="controls">
+  <input type="text" id="keywordInput" placeholder="Keyword (e.g. sport, tech…)" value="sport" style="width:160px" />
   <input type="text"   id="searchInput"  placeholder="Search domain…"  oninput="applyFilters()" />
   <input type="number" id="minPrice"     placeholder="Min $"            oninput="applyFilters()" />
   <input type="number" id="maxPrice"     placeholder="Max $"            oninput="applyFilters()" />
@@ -469,7 +470,8 @@
     await fetch('/api/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proxies })
+      const keyword = (document.getElementById('keywordInput').value || '').trim() || 'sport';
+    body: JSON.stringify({ proxies, keyword })
     });
     connectSSE();   // start listening for logs
     startPolling(); // poll domain results every 3s
