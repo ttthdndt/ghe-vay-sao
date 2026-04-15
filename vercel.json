@@ -1,15 +1,20 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/public/$1" }
-  ],
-  "headers": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
-      ]
+      "src": "api/*.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": ["lib/**"]
+      }
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }
