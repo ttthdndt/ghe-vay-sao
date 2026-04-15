@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler
 from datetime import datetime
 
 # Import shared WHOIS library (Vercel bundles files starting with _)
-from api._whois_lib import whois_lookup
+from lib.whois_lib import whois_lookup
 
 
 def _cors_headers():
