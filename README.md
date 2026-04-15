@@ -8,10 +8,7 @@ HugeDomains scraper + WHOIS lookup — deployed as a web app on Vercel.
 domain-hunter/
 ├── api/
 │   ├── scrape.py        # POST /api/scrape — scrape HugeDomains
-│   └── whois.py         # POST /api/whois  — WHOIS lookup
-├── lib/
-│   ├── __init__.py
-│   └── whois_lib.py     # Shared WHOIS client (raw TCP sockets)
+│   └── whois.py         # POST /api/whois  — WHOIS lookup (includes WHOIS client)
 ├── public/
 │   └── index.html       # Frontend SPA
 ├── requirements.txt     # Python deps (requests, beautifulsoup4)
