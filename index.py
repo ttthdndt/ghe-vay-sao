@@ -3,7 +3,7 @@ Domain Hunter — Flask API for Vercel
 HugeDomains scraper + raw-socket WHOIS lookup.
 """
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, Response
 import csv
 import io
 import re
@@ -18,14 +18,7 @@ except ImportError:
     http_requests = None
     BeautifulSoup = None
 
-app = Flask(__name__, static_folder="../public", static_url_path="")
-
-
-# ──────────────────── Serve Frontend ────────────────────
-
-@app.route("/")
-def index():
-    return send_from_directory(app.static_folder, "index.html")
+app = Flask(__name__)
 
 
 # ──────────────────── WHOIS Engine ────────────────────
@@ -350,7 +343,6 @@ def api_export():
     for row in rows:
         writer.writerow(row)
 
-    from flask import Response
     return Response(
         output.getvalue(),
         mimetype="text/csv",
