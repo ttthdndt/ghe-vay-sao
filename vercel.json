@@ -2,19 +2,23 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/*.py",
+      "src": "api/scrape.py",
       "use": "@vercel/python",
-      "config": {
-        "includeFiles": ["lib/**", "requirements.txt"]
-      }
+      "config": { "includeFiles": ["lib/**"] }
     },
     {
-      "src": "public/**",
+      "src": "api/whois.py",
+      "use": "@vercel/python",
+      "config": { "includeFiles": ["lib/**"] }
+    },
+    {
+      "src": "index.html",
       "use": "@vercel/static"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/public/$1" }
+    { "src": "/api/scrape", "dest": "/api/scrape.py" },
+    { "src": "/api/whois",  "dest": "/api/whois.py"  },
+    { "src": "/(.*)",       "dest": "/index.html"    }
   ]
 }
