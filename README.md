@@ -1,29 +1,16 @@
 # 🏹 Domain Hunter
 
-HugeDomains scraper + WHOIS lookup web app. Built with Flask, deployable to Vercel.
+HugeDomains scraper + WHOIS lookup — Flask web app deployed on Vercel.
 
 ## Features
 
-- Scrape domain listings from HugeDomains.com by keyword
-- WHOIS lookup (raw socket, no external library) — checks created/expires dates
-- Filter for **10-year registrations** (strong SEO signal)
-- Sort by any column
-- Export visible results to CSV
-- View raw WHOIS response per domain
+- **Search** — Scrape domain listings from HugeDomains.com by keyword
+- **WHOIS Lookup** — Check creation/expiration dates via raw socket WHOIS queries
+- **10-Year Filter** — Highlight domains with exactly 10-year registration spans
+- **Export CSV** — Download filtered results
+- **Right-click** — Google search, single WHOIS, view raw WHOIS, copy domain
 
----
-
-## Local Development
-
-```bash
-pip install -r requirements.txt
-python app.py
-# → http://localhost:5000
-```
-
----
-
-## Deploy to Vercel via GitHub
+## Deploy to Vercel
 
 ### 1. Push to GitHub
 
@@ -35,48 +22,38 @@ git remote add origin https://github.com/YOUR_USERNAME/domain-hunter.git
 git push -u origin main
 ```
 
-### 2. Connect to Vercel
+### 2. Deploy on Vercel
 
-1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+1. Go to [vercel.com/new](https://vercel.com/new)
 2. Import your GitHub repo
-3. Framework: **Other** (Vercel auto-detects Python via `vercel.json`)
-4. Click **Deploy** — done!
+3. Framework preset: **Other**
+4. Click **Deploy**
 
-Vercel will pick up `vercel.json` automatically and route all requests to `app.py`.
+That's it — Vercel auto-detects the Python serverless function and static files.
 
-### Notes on Vercel
+### Local Development
 
-- Hobby plan: 10s function timeout per request
-- WHOIS lookups are done one at a time from the browser to stay within limits
-- Raw socket WHOIS works fine on Vercel's serverless infrastructure
-- The scraping endpoint may occasionally time out on very large `max_rows` values — keep it under 100 for safety
-
----
+```bash
+pip install -r requirements.txt
+python api/index.py
+# Open http://localhost:5000
+```
 
 ## Project Structure
 
 ```
 domain-hunter/
-├── app.py              # Flask app + WHOIS client + scraper
-├── templates/
-│   └── index.html      # Single-page frontend
-├── requirements.txt
-├── vercel.json         # Vercel routing config
-└── .gitignore
+├── api/
+│   └── index.py          # Flask API (serverless on Vercel)
+├── public/
+│   └── index.html         # Frontend SPA
+├── vercel.json            # Vercel routing config
+├── requirements.txt       # Python deps
+└── README.md
 ```
 
----
+## Note on WHOIS
 
-## API Endpoints
-
-### `POST /api/search`
-```json
-{ "keyword": "sport", "price_max": "495", "max_rows": 100 }
-```
-Returns: `{ "domains": [...], "count": N }`
-
-### `POST /api/whois`
-```json
-{ "domain": "example.com" }
-```
-Returns: `{ "domain": "...", "created": "YYYY-MM-DD", "expires": "YYYY-MM-DD", "years": "10.0", "registrar": "...", "raw": "..." }`
+Raw socket WHOIS queries (port 43) may be blocked on some serverless platforms.
+If WHOIS fails on Vercel, the scraping still works — you can run WHOIS locally
+or use a WHOIS API provider as a fallback.

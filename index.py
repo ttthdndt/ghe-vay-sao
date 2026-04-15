@@ -1,50 +1,58 @@
 """
-Domain Hunter — Flask Web App
-Deploy to Vercel via GitHub.
+Domain Hunter — Flask API for Vercel
+HugeDomains scraper + raw-socket WHOIS lookup.
 """
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, send_from_directory
+import csv
+import io
 import re
 import json
 import socket
-import threading
 from datetime import datetime
 
 try:
     import requests as http_requests
     from bs4 import BeautifulSoup
-    SCRAPER_AVAILABLE = True
 except ImportError:
-    SCRAPER_AVAILABLE = False
+    http_requests = None
+    BeautifulSoup = None
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="../public", static_url_path="")
 
-# ─────────────────── WHOIS Servers ───────────────────
+
+# ──────────────────── Serve Frontend ────────────────────
+
+@app.route("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+
+# ──────────────────── WHOIS Engine ────────────────────
 
 WHOIS_SERVERS = {
     "com": "whois.verisign-grs.com",
     "net": "whois.verisign-grs.com",
     "org": "whois.pir.org",
-    "io":  "whois.nic.io",
-    "co":  "whois.nic.co",
+    "io": "whois.nic.io",
+    "co": "whois.nic.co",
     "info": "whois.afilias.net",
     "biz": "whois.biz",
-    "me":  "whois.nic.me",
-    "us":  "whois.nic.us",
+    "me": "whois.nic.me",
+    "us": "whois.nic.us",
     "xyz": "whois.nic.xyz",
     "online": "whois.nic.online",
     "site": "whois.nic.site",
     "store": "whois.nic.store",
     "app": "whois.nic.google",
     "dev": "whois.nic.google",
-    "ai":  "whois.nic.ai",
-    "cc":  "ccwhois.verisign-grs.com",
-    "tv":  "tvwhois.verisign-grs.com",
+    "ai": "whois.nic.ai",
+    "cc": "ccwhois.verisign-grs.com",
+    "tv": "tvwhois.verisign-grs.com",
 }
 
-# ─────────────────── Raw WHOIS Client ───────────────────
 
-def _raw_whois_query(domain, server, port=43, timeout=8):
+def _raw_whois_query(domain, server, port=43, timeout=10):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
     s.connect((server, port))
@@ -67,10 +75,9 @@ def _parse_date(date_str):
     date_str = re.sub(r'\s*\(?\s*UTC\s*\)?\s*$', '', date_str, flags=re.I)
     date_str = re.sub(r'\s*[A-Z]{2,4}\s*$', '', date_str)
     formats = [
-        "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z",
-        "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d-%b-%Y",
-        "%d %b %Y", "%d/%m/%Y", "%Y/%m/%d", "%Y.%m.%d",
-        "%B %d, %Y", "%b %d, %Y", "%d-%b-%Y %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d", "%d-%b-%Y", "%d %b %Y", "%d/%m/%Y", "%Y/%m/%d",
+        "%Y.%m.%d", "%B %d, %Y", "%b %d, %Y", "%d-%b-%Y %H:%M:%S",
         "%a %b %d %H:%M:%S %Y", "%Y%m%d",
     ]
     for fmt in formats:
@@ -85,44 +92,38 @@ def _parse_whois_text(text):
     result = {"created": None, "expires": None, "registrar": None, "raw": text}
 
     created_patterns = [
-        r'Creat(?:ion|ed)\s*Date\s*:\s*(.+)',
-        r'Registration\s*Date\s*:\s*(.+)',
-        r'Created\s*:\s*(.+)',
-        r'created\s*:\s*(.+)',
-        r'Registration\s*Time\s*:\s*(.+)',
-        r'\[Created on\]\s*(.+)',
+        r'Creat(?:ion|ed)\s*Date\s*:\s*(.+)', r'Registration\s*Date\s*:\s*(.+)',
+        r'Created\s*:\s*(.+)', r'created\s*:\s*(.+)',
+        r'Registration\s*Time\s*:\s*(.+)', r'\[Created on\]\s*(.+)',
     ]
     expiry_patterns = [
         r'(?:Registry\s+)?Expir(?:y|ation)\s*Date\s*:\s*(.+)',
         r'Registrar\s+Registration\s+Expiration\s+Date\s*:\s*(.+)',
-        r'Expir(?:es|ation)\s*:\s*(.+)',
-        r'paid-till\s*:\s*(.+)',
-        r'Expiration\s*Time\s*:\s*(.+)',
-        r'\[Expires on\]\s*(.+)',
+        r'Expir(?:es|ation)\s*:\s*(.+)', r'paid-till\s*:\s*(.+)',
+        r'Expiration\s*Time\s*:\s*(.+)', r'\[Expires on\]\s*(.+)',
         r'Renewal\s+Date\s*:\s*(.+)',
     ]
     registrar_patterns = [
-        r'Registrar\s*:\s*(.+)',
-        r'Sponsoring\s+Registrar\s*:\s*(.+)',
+        r'Registrar\s*:\s*(.+)', r'Sponsoring\s+Registrar\s*:\s*(.+)',
         r'registrar\s*:\s*(.+)',
     ]
 
-    for pattern in created_patterns:
-        m = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+    for p in created_patterns:
+        m = re.search(p, text, re.I | re.M)
         if m and not result["created"]:
             result["created"] = _parse_date(m.group(1).strip())
             if result["created"]:
                 break
 
-    for pattern in expiry_patterns:
-        m = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+    for p in expiry_patterns:
+        m = re.search(p, text, re.I | re.M)
         if m and not result["expires"]:
             result["expires"] = _parse_date(m.group(1).strip())
             if result["expires"]:
                 break
 
-    for pattern in registrar_patterns:
-        m = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+    for p in registrar_patterns:
+        m = re.search(p, text, re.I | re.M)
         if m and not result["registrar"]:
             reg = m.group(1).strip()
             if reg.upper() not in ("", "N/A") and "whois." not in reg.lower():
@@ -133,8 +134,11 @@ def _parse_whois_text(text):
         date_candidates = re.findall(
             r'(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z?)?)', text
         )
-        parsed_dates = [_parse_date(dc) for dc in date_candidates]
-        parsed_dates = [d for d in parsed_dates if d and d.year > 1990]
+        parsed_dates = []
+        for dc in date_candidates:
+            pd = _parse_date(dc)
+            if pd and pd.year > 1990:
+                parsed_dates.append(pd)
         if parsed_dates:
             parsed_dates.sort()
             if not result["created"]:
@@ -153,7 +157,7 @@ def whois_lookup(domain_name):
     raw_text = _raw_whois_query(domain_name, server)
 
     referral_match = re.search(
-        r'Registrar\s+WHOIS\s+Server\s*:\s*(\S+)', raw_text, re.IGNORECASE
+        r'Registrar\s+WHOIS\s+Server\s*:\s*(\S+)', raw_text, re.I
     )
     if referral_match:
         ref_server = referral_match.group(1).strip().rstrip(".")
@@ -168,11 +172,11 @@ def whois_lookup(domain_name):
     return _parse_whois_text(raw_text)
 
 
-# ─────────────────── Scraper ───────────────────
+# ──────────────────── Scraper ────────────────────
 
 def scrape_hugedomains(keyword, price_max="495", max_rows=100):
-    if not SCRAPER_AVAILABLE:
-        raise ImportError("Missing: pip install requests beautifulsoup4")
+    if not http_requests or not BeautifulSoup:
+        raise ImportError("Missing packages: requests, beautifulsoup4")
 
     url = "https://www.hugedomains.com/domain_search.cfm"
     params = {
@@ -195,13 +199,13 @@ def scrape_hugedomains(keyword, price_max="495", max_rows=100):
         "Accept-Language": "en-US,en;q=0.9",
     }
 
-    resp = http_requests.get(url, params=params, headers=headers, timeout=25)
+    resp = http_requests.get(url, params=params, headers=headers, timeout=30)
     resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
     domains = []
 
-    # Strategy 1: JSON in script tags
+    # Strategy 1: structured data
     for script_tag in soup.find_all("script"):
         text = script_tag.string or ""
         if "domainName" in text or "domain_name" in text:
@@ -215,7 +219,7 @@ def scrape_hugedomains(keyword, price_max="495", max_rows=100):
                 except (json.JSONDecodeError, AttributeError):
                     pass
 
-    # Strategy 2: HTML selectors
+    # Strategy 2: HTML listing
     if not domains:
         selectors = [
             ("div.domain-listing", "a", ".price"),
@@ -239,7 +243,7 @@ def scrape_hugedomains(keyword, price_max="495", max_rows=100):
                 if domains:
                     break
 
-    # Strategy 3: Link scan
+    # Strategy 3: link scan
     if not domains:
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
@@ -253,7 +257,7 @@ def scrape_hugedomains(keyword, price_max="495", max_rows=100):
                 if text not in [x["domain"] for x in domains]:
                     domains.append({"domain": text, "price": ""})
 
-    # Strategy 4: Text scan
+    # Strategy 4: regex scan
     if not domains:
         page_text = soup.get_text()
         found = re.findall(
@@ -271,80 +275,89 @@ def scrape_hugedomains(keyword, price_max="495", max_rows=100):
     return domains
 
 
-# ─────────────────── Flask Routes ───────────────────
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
+# ──────────────────── API Routes ────────────────────
 
 @app.route("/api/search", methods=["POST"])
 def api_search():
-    data = request.get_json() or {}
-    keyword   = data.get("keyword", "").strip()
-    price_max = data.get("price_max", "495")
-    max_rows  = int(data.get("max_rows", 100))
-
+    data = request.get_json(force=True)
+    keyword = data.get("keyword", "").strip()
     if not keyword:
-        return jsonify({"error": "keyword required"}), 400
-
+        return jsonify({"error": "Keyword is required"}), 400
     try:
-        results = scrape_hugedomains(keyword, price_max=price_max, max_rows=max_rows)
+        results = scrape_hugedomains(
+            keyword=keyword,
+            price_max=data.get("price_max", "495"),
+            max_rows=int(data.get("max_rows", 100)),
+        )
+        # Deduplicate
         seen = set()
-        clean = []
-        for i, item in enumerate(results, 1):
+        unique = []
+        for item in results:
             d = item["domain"].lower().strip()
-            if d in seen:
-                continue
-            seen.add(d)
-            clean.append({
-                "num":       len(clean) + 1,
-                "domain":    item["domain"],
-                "price":     item.get("price", ""),
-                "created":   "",
-                "expires":   "",
-                "registrar": "",
-                "years":     "",
-            })
-        return jsonify({"domains": clean, "count": len(clean)})
+            if d not in seen:
+                seen.add(d)
+                unique.append(item)
+        return jsonify({"domains": unique, "count": len(unique)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/whois", methods=["POST"])
 def api_whois():
-    data   = request.get_json() or {}
+    data = request.get_json(force=True)
     domain = data.get("domain", "").strip()
     if not domain:
-        return jsonify({"error": "domain required"}), 400
-
+        return jsonify({"error": "Domain is required"}), 400
     try:
         w = whois_lookup(domain)
-        fmt = lambda d: d.strftime("%Y-%m-%d") if isinstance(d, datetime) else (str(d) if d else "")
+        fmt = lambda d: d.strftime("%Y-%m-%d") if isinstance(d, datetime) else None
         created = fmt(w.get("created"))
         expires = fmt(w.get("expires"))
-
-        years = ""
+        years = None
         if created and expires:
             try:
                 cd = datetime.strptime(created, "%Y-%m-%d")
                 ed = datetime.strptime(expires, "%Y-%m-%d")
-                y = (ed - cd).days / 365.25
-                years = f"{y:.1f}"
-            except Exception:
+                years = round((ed - cd).days / 365.25, 1)
+            except ValueError:
                 pass
-
         return jsonify({
-            "domain":    domain,
-            "created":   created  or "N/A",
-            "expires":   expires  or "N/A",
-            "registrar": (w.get("registrar") or "")[:60],
-            "years":     years,
-            "raw":       w.get("raw", ""),
+            "domain": domain,
+            "created": created,
+            "expires": expires,
+            "years": years,
+            "registrar": w.get("registrar"),
+            "raw": w.get("raw", "")[:5000],
         })
     except Exception as e:
-        return jsonify({"error": str(e), "domain": domain}), 500
+        return jsonify({"domain": domain, "error": str(e)}), 200
 
 
+@app.route("/api/export", methods=["POST"])
+def api_export():
+    data = request.get_json(force=True)
+    rows = data.get("rows", [])
+    if not rows:
+        return jsonify({"error": "No rows to export"}), 400
+
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=["num", "domain", "price", "created", "expires", "years", "registrar"],
+        extrasaction="ignore",
+    )
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=domains.csv"},
+    )
+
+
+# Local development
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
