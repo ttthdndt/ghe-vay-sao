@@ -272,7 +272,7 @@
   <div class="card" style="padding: 12px 24px;">
     <div class="filter-row">
       <span style="font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:1px;font-weight:600;">Filter</span>
-      <button class="btn btn-primary" style="padding:7px 16px;font-size:12px;" onclick="filter10y()">🎯 10-Year Only</button>
+      <button class="btn btn-primary" style="padding:7px 16px;font-size:12px;" onclick="filter10y()">🎯 &gt; 10-Year</button>
       <button class="btn btn-ghost" style="padding:7px 16px;font-size:12px;" onclick="showAll()">📋 Show All</button>
       <span class="filter-info" id="filterInfo"></span>
     </div>
@@ -414,7 +414,7 @@ function renderTable(list) {
   }
   tbody.innerHTML = list.map((r, i) => {
     const years = r.years ?? calcYears(r);
-    const yClass = years !== null ? (parseFloat(years) >= 9.5 && parseFloat(years) <= 10.5 ? 'y10' : 'y-other') : '';
+    const yClass = years !== null ? (parseFloat(years) > 10 ? 'y10' : 'y-other') : '';
     const isPending = !r.created || r.created === '—';
     const isError = r.created === 'Error';
     return `<tr data-domain="${esc(r.domain)}" oncontextmenu="showCtx(event, '${esc(r.domain)}')">
@@ -584,7 +584,7 @@ function applyCurrentFilter() {
   if (currentFilter === '10y') {
     return allDomains.filter(r => {
       const y = parseFloat(calcYears(r));
-      return !isNaN(y) && y >= 9.5 && y <= 10.5;
+      return !isNaN(y) && y > 10;
     });
   }
   return [...allDomains];
@@ -597,7 +597,7 @@ function filter10y() {
   currentFilter = '10y';
   visibleDomains = applyCurrentFilter();
   sortCol ? sortAndRender() : renderTable(visibleDomains);
-  $('filterInfo').textContent = `🎯 Showing ${visibleDomains.length} of ${allDomains.length} — 10-year registration only`;
+  $('filterInfo').textContent = `🎯 Showing ${visibleDomains.length} of ${allDomains.length} — greater than 10-year registration`;
   $('stats').textContent = `${visibleDomains.length} domains (filtered)`;
 }
 
