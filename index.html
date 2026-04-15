@@ -1,542 +1,894 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HugeDomains Sport Scraper</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Domain Hunter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #080b0f;
+    --bg1:       #0d1117;
+    --bg2:       #161b22;
+    --bg3:       #21262d;
+    --border:    #30363d;
+    --green:     #39d353;
+    --green2:    #26a641;
+    --cyan:      #58a6ff;
+    --yellow:    #e3b341;
+    --red:       #f85149;
+    --fg:        #e6edf3;
+    --fg2:       #8b949e;
+    --fg3:       #484f58;
+    --mono:      'JetBrains Mono', monospace;
+    --display:   'Syne', sans-serif;
+    --radius:    6px;
+    --glow:      0 0 20px rgba(57,211,83,0.15);
+  }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg: #0d0d0d;
-      --surface: #161616;
-      --surface2: #1e1e1e;
-      --border: #2a2a2a;
-      --accent: #00e5a0;
-      --text: #e8e8e8;
-      --muted: #555;
-      --yellow: #f5c400;
-      --red: #ff5555;
-      --blue: #7aa2f7;
-    }
+  html { scroll-behavior: smooth; }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'IBM Plex Sans', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      padding: 28px 24px;
-      gap: 20px;
-    }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
 
-    /* ── Header ── */
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: 18px;
-      border-bottom: 1px solid var(--border);
-    }
-    .logo {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 1.3rem;
-      font-weight: 600;
-    }
-    .logo span { color: var(--accent); }
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
 
-    .status-badge {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.72rem;
-      padding: 4px 12px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
-      color: var(--muted);
-    }
-    .status-badge.running { border-color: var(--yellow); color: var(--yellow); animation: blink 1s infinite; }
-    .status-badge.done    { border-color: var(--accent); color: var(--accent); }
-    @keyframes blink { 50% { opacity: .35; } }
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: var(--bg1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
 
-    /* ── Controls ── */
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    input, textarea {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 13px;
-      border-radius: 6px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.83rem;
-      outline: none;
-      transition: border-color .15s;
-    }
-    input:focus, textarea:focus { border-color: var(--accent); }
-    input[type="text"]   { width: 240px; }
-    input[type="number"] { width: 100px; }
+  .logo {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--green);
+    letter-spacing: -0.5px;
+    text-shadow: var(--glow);
+    white-space: nowrap;
+  }
+  .logo span { color: var(--fg2); font-weight: 400; font-size: 13px; margin-left: 10px; font-family: var(--mono); }
 
-    /* proxy box */
-    .btn-proxy-toggle {
-      background: var(--surface);
-      color: var(--muted);
-      border: 1px solid var(--border);
-    }
-    .btn-proxy-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  /* ── Main layout ── */
+  main {
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 28px 32px;
+  }
 
-    #proxyPanel {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .proxy-panel { display: flex; flex-direction: column; }
-    .proxy-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 14px;
-      background: var(--surface2);
-      border-bottom: 1px solid var(--border);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-    .proxy-hint { color: #383838; margin-left: 8px; text-transform: none; }
-    .proxy-count { color: var(--accent); }
-    #proxyInput {
-      width: 100%;
-      height: 90px;
-      resize: vertical;
-      line-height: 1.65;
-      border: none;
-      border-radius: 0;
-      padding: 10px 14px;
-    }
+  /* ── Search Panel ── */
+  .search-panel {
+    background: var(--bg1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
 
-    button {
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 18px;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 0.84rem;
-      font-weight: 600;
-      transition: opacity .15s, transform .1s;
-    }
-    button:active { transform: scale(.97); }
-    .btn-scrape { background: var(--accent); color: #000; }
-    .btn-scrape:disabled { opacity: .35; cursor: not-allowed; }
-    .btn-export {
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .btn-export:hover { border-color: var(--accent); color: var(--accent); }
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field-group label {
+    color: var(--fg3);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
 
-    .meta {
-      margin-left: auto;
-      font-size: 0.76rem;
-      color: var(--muted);
-      font-family: 'IBM Plex Mono', monospace;
-    }
+  input[type="text"], input[type="number"] {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  input:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 3px rgba(88,166,255,.1);
+  }
+  input::placeholder { color: var(--fg3); }
+  #keyword { width: 180px; }
+  #price-max { width: 80px; }
+  #max-rows { width: 70px; }
 
-    /* ── Main layout: table left, log right ── */
-    .main {
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 16px;
-      flex: 1;
-      min-height: 0;
-    }
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius);
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
 
-    /* ── Table ── */
-    .table-wrap {
-      overflow: auto;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      height: 600px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.86rem;
-    }
-    thead { position: sticky; top: 0; z-index: 1; }
-    thead tr { background: var(--surface2); border-bottom: 1px solid var(--border); }
-    th {
-      text-align: left;
-      padding: 11px 14px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--muted);
-      font-weight: 600;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      cursor: pointer;
-      white-space: nowrap;
-      user-select: none;
-    }
-    th:hover { color: var(--text); }
-    th.active { color: var(--accent); }
-    .arr { margin-left: 4px; opacity: .4; }
-    th.active .arr { opacity: 1; }
+  .btn-primary {
+    background: var(--green2);
+    color: #fff;
+    border: 1px solid var(--green);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--green);
+    box-shadow: var(--glow);
+  }
 
-    td {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-    tr:last-child td { border-bottom: none; }
-    tbody tr:hover td { background: var(--surface); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--cyan);
+    border: 1px solid var(--cyan);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: rgba(88,166,255,.1);
+  }
 
-    .domain-cell { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
-    .domain-cell a { color: var(--accent); text-decoration: none; }
-    .domain-cell a:hover { text-decoration: underline; }
-    .price-cell { font-family: 'IBM Plex Mono', monospace; color: var(--yellow); }
-    .date-cell  { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 0.81rem; }
-    .date-na    { color: #2e2e2e; }
+  .btn-ghost {
+    background: var(--bg3);
+    color: var(--fg2);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--border);
+    color: var(--fg);
+  }
 
-    .empty { text-align: center; padding: 60px; color: var(--muted);
-             font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; }
+  .btn-stop {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--red);
+  }
+  .btn-stop:hover:not(:disabled) {
+    background: rgba(248,81,73,.1);
+  }
 
-    /* ── Log panel ── */
-    .log-panel {
-      display: flex;
-      flex-direction: column;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      height: 600px;
-    }
-    .log-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
-      background: var(--surface2);
-      border-bottom: 1px solid var(--border);
-      font-size: 0.72rem;
-      font-family: 'IBM Plex Mono', monospace;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .06em;
-    }
-    .log-clear {
-      background: none;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 0.72rem;
-      font-family: 'IBM Plex Mono', monospace;
-      padding: 2px 6px;
-    }
-    .log-clear:hover { color: var(--red); }
-    .log-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px 14px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.76rem;
-      line-height: 1.65;
-    }
-    .log-line { white-space: pre-wrap; word-break: break-all; }
-    .log-line.info   { color: #888; }
-    .log-line.ok     { color: var(--accent); }
-    .log-line.warn   { color: var(--yellow); }
-    .log-line.error  { color: var(--red); }
-    .log-line.done   { color: var(--blue); font-weight: 600; }
+  .btn-filter {
+    background: rgba(57,211,83,.1);
+    color: var(--green);
+    border: 1px solid rgba(57,211,83,.3);
+  }
+  .btn-filter:hover:not(:disabled) {
+    background: rgba(57,211,83,.2);
+    border-color: var(--green);
+  }
+  .btn-filter.active {
+    background: var(--green2);
+    color: #fff;
+    border-color: var(--green);
+  }
 
-    /* custom scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #444; }
+  .btn-actions { margin-top: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 
-    /* ── Proxy panel ── */
-    .btn-proxy-toggle {
-      background: var(--surface);
-      color: var(--muted);
-      border: 1px solid var(--border);
-      font-size: 0.82rem;
-    }
-    .btn-proxy-toggle:hover { border-color: var(--blue); color: var(--blue); }
+  /* ── Status bar ── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
 
-    .proxy-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .proxy-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 9px 14px;
-      background: var(--surface2);
-      border-bottom: 1px solid var(--border);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-    .proxy-hint { color: #3a3a3a; text-transform: none; margin-left: 8px; }
-    .proxy-count { color: var(--blue); }
-    .proxy-textarea {
-      width: 100%;
-      height: 100px;
-      background: var(--surface);
-      border: none;
-      color: var(--accent);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.78rem;
-      padding: 10px 14px;
-      resize: vertical;
-      outline: none;
-      line-height: 1.7;
-    }
-    .proxy-textarea::placeholder { color: #2e2e2e; }
+  .status-text {
+    color: var(--fg2);
+    font-size: 12px;
+    flex: 1;
+  }
+  .status-text.running { color: var(--yellow); }
+  .status-text.done    { color: var(--green);  }
+  .status-text.error   { color: var(--red);    }
 
-  </style>
+  .progress-wrap {
+    width: 200px;
+    height: 4px;
+    background: var(--bg3);
+    border-radius: 2px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width .3s;
+    box-shadow: 0 0 8px var(--green);
+  }
+  .progress-bar.indeterminate {
+    width: 40% !important;
+    animation: indeterminate 1.2s ease-in-out infinite;
+  }
+  @keyframes indeterminate {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+
+  /* ── Filter bar ── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .filter-label { color: var(--fg3); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .stats-badge {
+    font-size: 11px;
+    color: var(--fg2);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2px 10px;
+  }
+
+  /* ── Table ── */
+  .table-wrap {
+    background: var(--bg1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead tr {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 10px 14px;
+    text-align: left;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--fg3);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { color: var(--cyan); }
+  th .sort-icon { margin-left: 4px; opacity: .4; }
+  th.sorted .sort-icon { opacity: 1; color: var(--cyan); }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(48,54,61,.5);
+    transition: background .1s;
+  }
+  tbody tr:hover { background: var(--bg2); }
+  tbody tr.ten-year { background: rgba(57,211,83,.04); }
+  tbody tr.ten-year:hover { background: rgba(57,211,83,.08); }
+
+  td {
+    padding: 9px 14px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .td-num { color: var(--fg3); width: 42px; }
+
+  .td-domain a {
+    color: var(--cyan);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color .15s;
+  }
+  .td-domain a:hover { color: var(--fg); text-decoration: underline; }
+
+  .td-price { color: var(--yellow); }
+  .td-created { color: var(--fg2); }
+  .td-expires { color: var(--fg2); }
+
+  .td-years .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--bg3);
+    color: var(--fg2);
+  }
+  .td-years .badge.ten {
+    background: rgba(57,211,83,.15);
+    color: var(--green);
+    border: 1px solid rgba(57,211,83,.3);
+  }
+
+  .td-registrar { color: var(--fg2); max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+  .td-actions { width: 70px; }
+  .btn-raw {
+    font-size: 10px;
+    padding: 3px 8px;
+    background: var(--bg3);
+    color: var(--fg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all .15s;
+  }
+  .btn-raw:hover { color: var(--fg); border-color: var(--fg3); }
+
+  /* Loading rows */
+  .loading-cell {
+    color: var(--fg3);
+    font-style: italic;
+  }
+
+  /* Spinning indicator */
+  .spin {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--fg3);
+  }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state h3 { font-family: var(--display); font-size: 18px; color: var(--fg2); margin-bottom: 6px; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.8);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--bg1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 700px;
+    max-width: 95vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,.6);
+    animation: modalIn .2s ease;
+  }
+  @keyframes modalIn {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: none; opacity: 1; }
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-title { font-family: var(--display); font-weight: 700; color: var(--fg); font-size: 15px; }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--fg3);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 4px;
+    transition: color .15s;
+  }
+  .modal-close:hover { color: var(--fg); }
+
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+  }
+  .modal-body pre {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg2);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.7;
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--fg);
+    z-index: 2000;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all .25s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error   { border-color: var(--red);   color: var(--red);   }
+</style>
 </head>
 <body>
 
 <header>
-  <div class="logo">huge<span>domains</span>.scraper</div>
-  <div class="status-badge" id="statusBadge">idle</div>
+  <div class="logo">🏹 Domain Hunter <span>HugeDomains Scraper + WHOIS</span></div>
 </header>
 
-<div class="controls">
-  <input type="text" id="keywordInput" placeholder="Keyword (e.g. sport, tech…)" value="sport" style="width:160px" />
-  <input type="text"   id="searchInput"  placeholder="Search domain…"  oninput="applyFilters()" />
-  <input type="number" id="minPrice"     placeholder="Min $"            oninput="applyFilters()" />
-  <input type="number" id="maxPrice"     placeholder="Max $"            oninput="applyFilters()" />
-  <button class="btn-scrape" id="scrapeBtn" onclick="triggerScrape()">▶ Run Scrape</button>
-  <button class="btn-export" onclick="exportCSV()">↓ Export CSV</button>
-  <button class="btn-proxy-toggle" onclick="toggleProxy()">⚙ Proxies</button>
-  <div class="meta" id="metaInfo">No data loaded</div>
-</div>
+<main>
 
-<!-- Proxy input panel -->
-<div id="proxyPanel" style="display:none">
-  <div class="proxy-panel">
-    <div class="proxy-header">
-      <span>Proxy List <span class="proxy-hint">one per line · format: IP:PORT:USER:PASS</span></span>
-      <span id="proxyCount" class="proxy-count">0 proxies</span>
+  <!-- Search Panel -->
+  <div class="search-panel">
+    <div class="field-group">
+      <label>Keyword</label>
+      <input type="text" id="keyword" placeholder="e.g. sport" value="sport">
     </div>
-    <textarea id="proxyInput" class="proxy-textarea"
-      placeholder="45.145.57.219:10038:ERhzQv:FURf57&#10;45.145.57.219:10035:ERhzQv:FURf57&#10;45.145.57.219:10034:ERhzQv:FURf57"
-      oninput="updateProxyCount()"
-      spellcheck="false"></textarea>
+    <div class="field-group">
+      <label>Max Price $</label>
+      <input type="number" id="price-max" value="495" min="0">
+    </div>
+    <div class="field-group">
+      <label>Max Rows</label>
+      <input type="number" id="max-rows" value="100" min="1" max="500">
+    </div>
+
+    <div class="btn-actions">
+      <button class="btn btn-primary" id="btn-search" onclick="startSearch()">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Search & Scrape
+      </button>
+      <button class="btn btn-secondary" id="btn-whois" onclick="startWhois()" disabled>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4M8 5.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        WHOIS All
+      </button>
+      <button class="btn btn-stop" id="btn-stop" onclick="stopAll()" style="display:none">
+        ■ Stop
+      </button>
+      <button class="btn btn-ghost" id="btn-export" onclick="exportCSV()" disabled>
+        ↓ Export CSV
+      </button>
+    </div>
   </div>
-</div>
 
-<div class="main">
+  <!-- Status + Progress -->
+  <div class="status-bar">
+    <div class="status-text" id="status-text">Ready — enter a keyword and click Search &amp; Scrape</div>
+    <div class="progress-wrap" id="progress-wrap" style="display:none">
+      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+    </div>
+  </div>
 
-  <!-- Domain table -->
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <span class="filter-label">Filter:</span>
+    <button class="btn btn-filter" id="btn-10y" onclick="filter10y()" disabled>🎯 10-Year Only</button>
+    <button class="btn btn-ghost" id="btn-show-all" onclick="showAll()" disabled>📋 Show All</button>
+    <span class="stats-badge" id="stats-badge">0 domains</span>
+    <span id="filter-info" style="font-size:11px;color:var(--green);"></span>
+  </div>
+
+  <!-- Table -->
   <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th onclick="sortBy('domain')">Domain <span class="arr" id="arr-domain">↕</span></th>
-          <th onclick="sortBy('price')">Price <span class="arr" id="arr-price">↕</span></th>
-          <th onclick="sortBy('created')">Created <span class="arr" id="arr-created">↕</span></th>
-          <th onclick="sortBy('expires')">Expires <span class="arr" id="arr-expires">↕</span></th>
-        </tr>
-      </thead>
-      <tbody id="tableBody">
-        <tr><td colspan="4" class="empty">Click "Run Scrape" to fetch domains.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Live log panel -->
-  <div class="log-panel">
-    <div class="log-header">
-      <span>● Live Log</span>
-      <button class="log-clear" onclick="clearLog()">clear</button>
+    <div class="table-scroll">
+      <table id="domain-table">
+        <thead>
+          <tr>
+            <th class="td-num">#</th>
+            <th onclick="sortBy('domain')">Domain <span class="sort-icon">⇅</span></th>
+            <th onclick="sortBy('price')">Price <span class="sort-icon">⇅</span></th>
+            <th onclick="sortBy('created')">Created <span class="sort-icon">⇅</span></th>
+            <th onclick="sortBy('expires')">Expires <span class="sort-icon">⇅</span></th>
+            <th onclick="sortBy('years')">Years <span class="sort-icon">⇅</span></th>
+            <th>Registrar</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">
+                <div class="icon">🏹</div>
+                <h3>No domains yet</h3>
+                <p>Enter a keyword above and click Search &amp; Scrape</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-    <div class="log-body" id="logBody"></div>
   </div>
 
+</main>
+
+<!-- Raw WHOIS Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Raw WHOIS</div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body">
+      <pre id="modal-content"></pre>
+    </div>
+  </div>
 </div>
+
+<!-- Toast -->
+<div id="toast"></div>
 
 <script>
-  let allData = [];
-  let sortCol = 'price';
-  let sortAsc = true;
-  let sseSource = null;
-  let pollTimer = null;
+// ── State ──
+let domains = [];        // full list of domain objects
+let visibleDomains = []; // currently shown (filtered or all)
+let running = false;
+let stopFlag = false;
+let sortKey = null;
+let sortDir = 1;
+let filterActive = false;
 
-  // ── Log ────────────────────────────────────────────────────────────────────
-  function appendLog(line) {
-    const el = document.getElementById('logBody');
-    const div = document.createElement('div');
-    div.className = 'log-line ' + logClass(line);
-    div.textContent = line;
-    el.appendChild(div);
-    el.scrollTop = el.scrollHeight;
+// ── UI helpers ──
+function setStatus(msg, cls = '') {
+  const el = document.getElementById('status-text');
+  el.textContent = msg;
+  el.className = 'status-text ' + cls;
+}
+
+function setProgress(val, max, indeterminate = false) {
+  const wrap = document.getElementById('progress-wrap');
+  const bar  = document.getElementById('progress-bar');
+  wrap.style.display = '';
+  if (indeterminate) {
+    bar.className = 'progress-bar indeterminate';
+    bar.style.width = '40%';
+  } else {
+    bar.className = 'progress-bar';
+    bar.style.width = max > 0 ? `${(val/max)*100}%` : '0%';
   }
+}
 
-  function logClass(line) {
-    if (line.includes('[Done]'))  return 'done';
-    if (line.includes('✓'))       return 'ok';
-    if (line.includes('✗') || line.includes('ERROR')) return 'error';
-    if (line.includes('WHOIS'))   return 'info';
-    return 'info';
-  }
+function hideProgress() {
+  document.getElementById('progress-wrap').style.display = 'none';
+}
 
-  function clearLog() {
-    document.getElementById('logBody').innerHTML = '';
-  }
+function setBadge(n, suffix = '') {
+  document.getElementById('stats-badge').textContent = `${n} domain${n !== 1 ? 's' : ''}${suffix}`;
+}
 
-  // ── SSE connection ─────────────────────────────────────────────────────────
-  function connectSSE() {
-    if (sseSource) sseSource.close();
-    sseSource = new EventSource('/api/logs/stream');
-    sseSource.onmessage = (e) => {
-      if (e.data) appendLog(e.data);
-    };
-    sseSource.onerror = () => {
-      // silently retry — browser reconnects automatically
-    };
-  }
+function showToast(msg, cls = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + cls;
+  setTimeout(() => { t.className = ''; }, 3000);
+}
 
-  // ── Fetch domains ──────────────────────────────────────────────────────────
-  async function fetchDomains() {
-    const search   = document.getElementById('searchInput').value;
-    const minPrice = document.getElementById('minPrice').value || 0;
-    const maxPrice = document.getElementById('maxPrice').value || 99999;
-    const params   = new URLSearchParams({ search, min_price: minPrice, max_price: maxPrice });
-    const res  = await fetch(`/api/domains?${params}`);
-    const json = await res.json();
-    allData = json.data;
-    updateStatus(json);
-    renderTable(allData);
-  }
+function setRunning(flag) {
+  running = flag;
+  document.getElementById('btn-search').disabled = flag;
+  document.getElementById('btn-whois').disabled  = flag || domains.length === 0;
+  document.getElementById('btn-stop').style.display = flag ? '' : 'none';
+}
 
-  function applyFilters() { fetchDomains(); }
+// ── Search ──
+async function startSearch() {
+  const keyword  = document.getElementById('keyword').value.trim();
+  const priceMax = document.getElementById('price-max').value || '495';
+  const maxRows  = parseInt(document.getElementById('max-rows').value) || 100;
 
-  // ── Status badge ───────────────────────────────────────────────────────────
-  function updateStatus(json) {
-    const badge = document.getElementById('statusBadge');
-    const meta  = document.getElementById('metaInfo');
-    const btn   = document.getElementById('scrapeBtn');
+  if (!keyword) { showToast('Enter a keyword first', 'error'); return; }
 
-    if (json.running) {
-      badge.textContent = '● scraping…';
-      badge.className = 'status-badge running';
-      btn.disabled = true;
-    } else if (json.last_updated) {
-      badge.textContent = '✓ done';
-      badge.className = 'status-badge done';
-      btn.disabled = false;
-      meta.textContent = `${json.total} domains · ${json.last_updated}`;
-    } else {
-      badge.textContent = 'idle';
-      badge.className = 'status-badge';
-      btn.disabled = false;
-    }
-  }
+  setRunning(true);
+  stopFlag = false;
+  setStatus(`Scraping HugeDomains for "${keyword}"...`, 'running');
+  setProgress(0, 1, true);
 
-  // ── Trigger scrape ─────────────────────────────────────────────────────────
-  function getProxies() {
-    const raw = document.getElementById('proxyInput').value.trim();
-    if (!raw) return [];
-    return raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  }
-
-  function updateProxyCount() {
-    const n = getProxies().length;
-    document.getElementById('proxyCount').textContent = n + ' ' + (n === 1 ? 'proxy' : 'proxies');
-  }
-
-  function toggleProxy() {
-    const panel = document.getElementById('proxyPanel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  }
-
-  async function triggerScrape() {
-    clearLog();
-    const proxies = getProxies();
-    await fetch('/api/scrape', {
+  try {
+    const resp = await fetch('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      const keyword = (document.getElementById('keywordInput').value || '').trim() || 'sport';
-    body: JSON.stringify({ proxies, keyword })
+      body: JSON.stringify({ keyword, price_max: priceMax, max_rows: maxRows }),
     });
-    connectSSE();   // start listening for logs
-    startPolling(); // poll domain results every 3s
-  }
+    const data = await resp.json();
 
-  function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(async () => {
-      await fetchDomains();
-      const s = await (await fetch('/api/status')).json();
-      if (!s.running) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-        // close SSE after 3s grace period so last logs arrive
-        setTimeout(() => { if (sseSource) sseSource.close(); }, 3000);
-      }
-    }, 3000);
-  }
+    if (data.error) throw new Error(data.error);
 
-  // ── Table render ───────────────────────────────────────────────────────────
-  function renderTable(data) {
-    const tbody = document.getElementById('tableBody');
-    if (!data.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="empty">No domains match your filters.</td></tr>`;
-      return;
+    domains = data.domains;
+    visibleDomains = [...domains];
+    filterActive = false;
+    document.getElementById('filter-info').textContent = '';
+    renderTable(visibleDomains);
+    setBadge(domains.length);
+    setStatus(`Found ${domains.length} domains — click WHOIS All to check registration dates`, 'done');
+    hideProgress();
+
+    document.getElementById('btn-whois').disabled  = false;
+    document.getElementById('btn-export').disabled = false;
+    document.getElementById('btn-10y').disabled    = true;
+    document.getElementById('btn-show-all').disabled = false;
+
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'error');
+    hideProgress();
+    showToast(err.message, 'error');
+  } finally {
+    setRunning(false);
+  }
+}
+
+// ── WHOIS All ──
+async function startWhois() {
+  if (!domains.length) return;
+  setRunning(true);
+  stopFlag = false;
+  setProgress(0, domains.length);
+
+  for (let i = 0; i < domains.length; i++) {
+    if (stopFlag) {
+      setStatus(`Stopped at ${i}/${domains.length}`, 'error');
+      break;
     }
-    tbody.innerHTML = data.map(d => `
-      <tr>
-        <td class="domain-cell"><a href="https://who.is/whois/${d.domain}" target="_blank">${d.domain}</a></td>
-        <td class="price-cell">${d.price}</td>
-        <td class="date-cell ${d.created === 'N/A' || d.created === 'Error' ? 'date-na' : ''}">${d.created}</td>
-        <td class="date-cell ${d.expires === 'N/A' || d.expires === 'Error' ? 'date-na' : ''}">${d.expires}</td>
-      </tr>`).join('');
-  }
+    const d = domains[i];
+    setStatus(`WHOIS [${i+1}/${domains.length}]  ${d.domain}`, 'running');
+    setProgress(i+1, domains.length);
 
-  // ── Sort ───────────────────────────────────────────────────────────────────
-  function sortBy(col) {
-    if (sortCol === col) sortAsc = !sortAsc;
-    else { sortCol = col; sortAsc = true; }
-
-    document.querySelectorAll('th').forEach(th => th.classList.remove('active'));
-    document.querySelectorAll('.arr').forEach(a => a.textContent = '↕');
-    const arr = document.getElementById(`arr-${col}`);
-    if (arr) { arr.textContent = sortAsc ? '↑' : '↓'; arr.closest('th').classList.add('active'); }
-
-    allData.sort((a, b) => {
-      let av = a[col] || '', bv = b[col] || '';
-      if (col === 'price') {
-        av = parseInt(av.replace(/\D/g, '') || 0);
-        bv = parseInt(bv.replace(/\D/g, '') || 0);
+    try {
+      const resp = await fetch('/api/whois', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: d.domain }),
+      });
+      const w = await resp.json();
+      if (!w.error) {
+        d.created   = w.created;
+        d.expires   = w.expires;
+        d.registrar = w.registrar;
+        d.years     = w.years;
+        d.raw       = w.raw;
+      } else {
+        d.created = 'Error'; d.expires = w.error.substring(0,40); d.years = '';
       }
-      return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-    });
-    renderTable(allData);
+    } catch (err) {
+      d.created = 'Error'; d.expires = err.message.substring(0,40); d.years = '';
+    }
+
+    updateRow(i);
   }
 
-  // ── Export ─────────────────────────────────────────────────────────────────
-  function exportCSV() {
-    const search = document.getElementById('searchInput').value;
-    window.location.href = `/api/export?search=${encodeURIComponent(search)}`;
+  if (!stopFlag) {
+    setStatus(`WHOIS complete ✓  ${domains.length} domains checked`, 'done');
+    document.getElementById('btn-10y').disabled = false;
+    showToast('WHOIS complete!', 'success');
+  }
+  setRunning(false);
+  hideProgress();
+}
+
+function stopAll() {
+  stopFlag = true;
+  running  = false;
+  document.getElementById('btn-stop').style.display = 'none';
+}
+
+// ── Render ──
+function renderTable(rows) {
+  const tbody = document.getElementById('table-body');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">🔍</div><h3>No results</h3><p>Try a different keyword</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((d, i) => rowHTML(d, i)).join('');
+}
+
+function rowHTML(d, i) {
+  const isTen = calcTenYear(d);
+  const yBadge = d.years
+    ? `<span class="badge${isTen ? ' ten' : ''}">${d.years}y</span>`
+    : (d.created === 'Error' ? '<span style="color:var(--red);font-size:11px">err</span>' : '<span style="color:var(--fg3)">—</span>');
+  return `<tr class="${isTen ? 'ten-year' : ''}" id="row-${d.num}">
+    <td class="td-num">${d.num}</td>
+    <td class="td-domain"><a href="https://www.google.com/search?q=${d.domain}" target="_blank" rel="noopener">${d.domain}</a></td>
+    <td class="td-price">${d.price || '—'}</td>
+    <td class="td-created">${d.created || '<span style="color:var(--fg3)">—</span>'}</td>
+    <td class="td-expires">${d.expires || '<span style="color:var(--fg3)">—</span>'}</td>
+    <td class="td-years">${yBadge}</td>
+    <td class="td-registrar" title="${d.registrar||''}">${d.registrar || '<span style="color:var(--fg3)">—</span>'}</td>
+    <td class="td-actions"><button class="btn-raw" onclick="showRaw(${d.num-1})">RAW</button></td>
+  </tr>`;
+}
+
+function updateRow(i) {
+  const d = domains[i];
+  const el = document.getElementById('row-' + d.num);
+  if (!el) return;
+  const newRow = document.createElement('tbody');
+  newRow.innerHTML = rowHTML(d, i);
+  el.replaceWith(newRow.firstChild);
+}
+
+// ── Sorting ──
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = 1; }
+
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+  const headers = { domain:1, price:2, created:3, expires:4, years:5 };
+  const ths = document.querySelectorAll('thead th');
+  if (headers[key] !== undefined) ths[headers[key]].classList.add('sorted');
+
+  visibleDomains.sort((a, b) => {
+    let av = a[key] || '', bv = b[key] || '';
+    if (key === 'years') { av = parseFloat(av) || 0; bv = parseFloat(bv) || 0; }
+    else if (key === 'price') {
+      av = parseFloat(String(av).replace(/[^0-9.]/g,'')) || 0;
+      bv = parseFloat(String(bv).replace(/[^0-9.]/g,'')) || 0;
+    }
+    if (av < bv) return -sortDir;
+    if (av > bv) return  sortDir;
+    return 0;
+  });
+  renderTable(visibleDomains);
+}
+
+// ── Filter 10y ──
+function calcTenYear(d) {
+  try {
+    if (!d.created || !d.expires) return false;
+    if (['—','N/A','Error',''].includes(d.created)) return false;
+    if (['—','N/A','Error',''].includes(d.expires)) return false;
+    const cd = new Date(d.created), ed = new Date(d.expires);
+    const years = (ed - cd) / (365.25 * 86400000);
+    return years >= 9.5 && years <= 10.5;
+  } catch { return false; }
+}
+
+function filter10y() {
+  const ten = domains.filter(calcTenYear);
+  visibleDomains = ten;
+  filterActive = true;
+  renderTable(ten);
+  setBadge(ten.length, ` of ${domains.length} (10-year)`);
+  document.getElementById('filter-info').textContent = `🎯 ${ten.length} domains with ~10-year registrations`;
+  document.getElementById('btn-filter') && (document.getElementById('btn-10y').classList.add('active'));
+}
+
+function showAll() {
+  visibleDomains = [...domains];
+  filterActive = false;
+  renderTable(visibleDomains);
+  setBadge(domains.length);
+  document.getElementById('filter-info').textContent = '';
+  document.getElementById('btn-10y').classList.remove('active');
+}
+
+// ── Export CSV ──
+function exportCSV() {
+  if (!visibleDomains.length) { showToast('Nothing to export', 'error'); return; }
+  const headers = ['num','domain','price','created','expires','years','registrar'];
+  const rows = [headers.join(',')];
+  for (const d of visibleDomains) {
+    const years = d.years || (calcYears(d) ? calcYears(d).toFixed(1) : '');
+    rows.push(headers.map(k => {
+      const v = k === 'years' ? years : (d[k] || '');
+      return `"${String(v).replace(/"/g,'""')}"`;
+    }).join(','));
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `domains_${document.getElementById('keyword').value || 'export'}.csv`;
+  a.click();
+  showToast(`Exported ${visibleDomains.length} rows`, 'success');
+}
+
+function calcYears(d) {
+  try {
+    const cd = new Date(d.created), ed = new Date(d.expires);
+    return (ed - cd) / (365.25 * 86400000);
+  } catch { return null; }
+}
+
+// ── Raw WHOIS Modal ──
+async function showRaw(i) {
+  const d = domains[i];
+  document.getElementById('modal-title').textContent = `Raw WHOIS — ${d.domain}`;
+
+  let raw = d.raw || '';
+  if (!raw) {
+    document.getElementById('modal-content').textContent = 'Fetching...';
+    document.getElementById('modal-overlay').classList.add('open');
+    try {
+      const resp = await fetch('/api/whois', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: d.domain }),
+      });
+      const w = await resp.json();
+      raw = w.raw || 'No data returned';
+      d.raw = raw;
+    } catch (e) { raw = 'Error: ' + e.message; }
   }
 
-  // ── Init ───────────────────────────────────────────────────────────────────
-  fetchDomains();
-  connectSSE();  // reconnect to existing log stream if scrape is already running
+  document.getElementById('modal-content').textContent = raw;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── Enter key ──
+document.getElementById('keyword').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startSearch();
+});
 </script>
 </body>
 </html>

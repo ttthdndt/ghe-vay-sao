@@ -1,59 +1,82 @@
-# HugeDomains Sport Scraper
+# 🏹 Domain Hunter
 
-A FastAPI web app that scrapes domain listings from HugeDomains and enriches them with WHOIS data (Created / Expires dates) from who.is.
+HugeDomains scraper + WHOIS lookup web app. Built with Flask, deployable to Vercel.
 
 ## Features
-- Scrape domains with `sport` keyword (price $15–$1000, length 8–10 chars)
-- WHOIS lookup: Created Date & Expiry Date per domain
-- Live search & price filter
-- Sortable table columns
-- Export filtered results as CSV
-- Trigger fresh scrape from the UI
 
-## Project Structure
-```
-hugedomains-app/
-├── api/
-│   └── index.py       # FastAPI app (Vercel entry point)
-├── scraper.py          # Scraper + WHOIS logic
-├── index.html          # Frontend UI
-├── requirements.txt
-├── vercel.json
-└── .gitignore
-```
+- Scrape domain listings from HugeDomains.com by keyword
+- WHOIS lookup (raw socket, no external library) — checks created/expires dates
+- Filter for **10-year registrations** (strong SEO signal)
+- Sort by any column
+- Export visible results to CSV
+- View raw WHOIS response per domain
+
+---
 
 ## Local Development
 
 ```bash
 pip install -r requirements.txt
-uvicorn api.index:app --reload
-# Open http://localhost:8000
+python app.py
+# → http://localhost:5000
 ```
 
-## Deploy to GitHub + Vercel
+---
+
+## Deploy to Vercel via GitHub
 
 ### 1. Push to GitHub
+
 ```bash
 git init
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/YOUR_USERNAME/hugedomains-scraper.git
+git remote add origin https://github.com/YOUR_USERNAME/domain-hunter.git
 git push -u origin main
 ```
 
-### 2. Deploy to Vercel
-```bash
-npm i -g vercel   # install Vercel CLI (one-time)
-vercel            # follow prompts — framework: Other, root: ./
+### 2. Connect to Vercel
+
+1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+2. Import your GitHub repo
+3. Framework: **Other** (Vercel auto-detects Python via `vercel.json`)
+4. Click **Deploy** — done!
+
+Vercel will pick up `vercel.json` automatically and route all requests to `app.py`.
+
+### Notes on Vercel
+
+- Hobby plan: 10s function timeout per request
+- WHOIS lookups are done one at a time from the browser to stay within limits
+- Raw socket WHOIS works fine on Vercel's serverless infrastructure
+- The scraping endpoint may occasionally time out on very large `max_rows` values — keep it under 100 for safety
+
+---
+
+## Project Structure
+
+```
+domain-hunter/
+├── app.py              # Flask app + WHOIS client + scraper
+├── templates/
+│   └── index.html      # Single-page frontend
+├── requirements.txt
+├── vercel.json         # Vercel routing config
+└── .gitignore
 ```
 
-Or connect via Vercel dashboard:
-1. Go to https://vercel.com/new
-2. Import your GitHub repo
-3. Framework Preset → **Other**
-4. Click **Deploy**
+---
 
-> ⚠️ **Note**: Vercel serverless functions have a max execution time of 10s (hobby) / 60s (pro).
-> The scrape + WHOIS for 200+ domains takes several minutes.
-> For production use, consider adding a database (e.g. Vercel Postgres or Supabase) to cache results,
-> or run the scraper as a scheduled cron job.
+## API Endpoints
+
+### `POST /api/search`
+```json
+{ "keyword": "sport", "price_max": "495", "max_rows": 100 }
+```
+Returns: `{ "domains": [...], "count": N }`
+
+### `POST /api/whois`
+```json
+{ "domain": "example.com" }
+```
+Returns: `{ "domain": "...", "created": "YYYY-MM-DD", "expires": "YYYY-MM-DD", "years": "10.0", "registrar": "...", "raw": "..." }`
