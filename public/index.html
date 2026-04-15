@@ -437,15 +437,6 @@ function esc(s) {
 }
 
 // ─── API Calls ───
-async function safeJson(res) {
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Server returned non-JSON (HTTP ${res.status}): ${text.substring(0, 200)}`);
-  }
-}
-
 async function doSearch() {
   if (isSearching) return;
   const keyword = $('keyword').value.trim();
@@ -466,8 +457,10 @@ async function doSearch() {
         max_rows: parseInt($('maxRows').value) || 100,
       }),
     });
-    const data = await safeJson(res);
-    if (!res.ok) throw new Error(data.error || 'Scrape failed');
+    let data;
+    try { data = await res.json(); }
+    catch { throw new Error(`Server error (HTTP ${res.status}) — response was not JSON. Check Vercel logs.`); }
+    if (!res.ok) throw new Error(data.error || `Scrape failed (HTTP ${res.status})`);
 
     allDomains = (data.domains || []).map((d, i) => ({
       num: i + 1,
@@ -519,7 +512,9 @@ async function doWhoisAll() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domains: domainNames }),
       });
-      const data = await safeJson(res);
+      let data;
+      try { data = await res.json(); }
+      catch { throw new Error(`WHOIS server error (HTTP ${res.status}) — response was not JSON`); }
       if (data.results) {
         for (const d of batch) {
           const w = data.results[d.domain.toLowerCase()];
@@ -562,7 +557,7 @@ async function whoisSingle(domain) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain }),
     });
-    const data = await safeJson(res);
+    const data = await res.json().catch(() => { throw new Error(`WHOIS server error (HTTP ${res.status})`); });
     if (data.results && data.results[domain.toLowerCase()]) {
       const w = data.results[domain.toLowerCase()];
       const row = allDomains.find(d => d.domain.toLowerCase() === domain.toLowerCase());
