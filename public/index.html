@@ -4,389 +4,463 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Domain Hunter — HugeDomains Scraper + WHOIS</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏹</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0c0c14;--bg2:#12121e;--bg3:#1a1a2e;
-  --surface:#1e1e32;--surface2:#262640;--overlay:#333355;
-  --fg:#e0e0f0;--fg2:#9999bb;--fg3:#666688;
-  --accent:#6c63ff;--accent2:#8b83ff;--accent-glow:rgba(108,99,255,.15);
-  --green:#3ddc84;--green-glow:rgba(61,220,132,.12);
-  --red:#ff6b81;--yellow:#ffd93d;--orange:#ff9f43;
-  --radius:10px;--radius-lg:16px;
-  --font-display:'Outfit',sans-serif;
-  --font-mono:'JetBrains Mono',monospace;
-  --shadow:0 4px 24px rgba(0,0,0,.4);
-  --shadow-lg:0 8px 48px rgba(0,0,0,.5);
-}
-html{font-size:15px;scroll-behavior:smooth}
-body{
-  font-family:var(--font-display);background:var(--bg);color:var(--fg);
-  min-height:100vh;overflow-x:hidden;
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%,rgba(108,99,255,.08),transparent),
-    radial-gradient(ellipse 60% 40% at 80% 110%,rgba(61,220,132,.05),transparent);
-}
-input,button,select,textarea{font-family:inherit;font-size:inherit}
-::selection{background:var(--accent);color:#fff}
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:var(--bg2)}
-::-webkit-scrollbar-thumb{background:var(--overlay);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+  :root {
+    --bg: #0c0c14;
+    --bg2: #12121e;
+    --bg3: #1a1a2e;
+    --surface: #22223a;
+    --border: #2a2a48;
+    --fg: #e0e0f0;
+    --fg2: #8888aa;
+    --accent: #6c63ff;
+    --accent-g: linear-gradient(135deg, #6c63ff 0%, #a855f7 100%);
+    --green: #34d399;
+    --green-g: linear-gradient(135deg, #34d399 0%, #06b6d4 100%);
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --radius: 10px;
+    --shadow: 0 4px 24px rgba(0,0,0,.4);
+  }
 
-/* ── Layout ── */
-.app{max-width:1280px;margin:0 auto;padding:20px 24px 40px}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* ── Header ── */
-.header{display:flex;align-items:baseline;gap:16px;margin-bottom:28px;flex-wrap:wrap}
-.header h1{
-  font-size:2rem;font-weight:800;letter-spacing:-.02em;
-  background:linear-gradient(135deg,var(--accent),var(--green));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;
-}
-.header .sub{color:var(--fg3);font-size:.85rem;font-weight:400}
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
 
-/* ── Search Bar ── */
-.search-bar{
-  display:flex;flex-wrap:wrap;gap:12px;align-items:end;
-  background:var(--surface);border:1px solid rgba(255,255,255,.04);
-  border-radius:var(--radius-lg);padding:20px 24px;
-  box-shadow:var(--shadow);margin-bottom:16px;
-}
-.field{display:flex;flex-direction:column;gap:5px}
-.field label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--fg3);font-weight:600}
-.field input{
-  background:var(--bg2);border:1px solid var(--overlay);color:var(--fg);
-  border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:.85rem;
-  transition:border-color .2s,box-shadow .2s;
-}
-.field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
-.field.grow{flex:1;min-width:160px}
-.field.sm input{width:90px}
+  /* ── Ambient background ── */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -40%; left: -20%;
+    width: 80vw; height: 80vw;
+    background: radial-gradient(circle, rgba(108,99,255,.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -30%; right: -10%;
+    width: 60vw; height: 60vw;
+    background: radial-gradient(circle, rgba(52,211,153,.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
 
-.btn{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:10px 20px;border-radius:8px;border:none;
-  font-weight:600;font-size:.85rem;cursor:pointer;
-  transition:all .2s;white-space:nowrap;
-}
-.btn:active{transform:scale(.97)}
-.btn-primary{background:var(--accent);color:#fff;box-shadow:0 2px 12px var(--accent-glow)}
-.btn-primary:hover{background:var(--accent2);box-shadow:0 4px 20px rgba(108,99,255,.3)}
-.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.btn-green{background:var(--green);color:var(--bg);box-shadow:0 2px 12px var(--green-glow)}
-.btn-green:hover{filter:brightness(1.1)}
-.btn-green:disabled{opacity:.4;cursor:not-allowed}
-.btn-ghost{background:var(--surface2);color:var(--fg2);border:1px solid var(--overlay)}
-.btn-ghost:hover{background:var(--overlay);color:var(--fg)}
-.btn-sm{padding:7px 14px;font-size:.78rem}
+  .app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 24px 28px 40px; }
 
-/* ── Toolbar ── */
-.toolbar{
-  display:flex;flex-wrap:wrap;gap:10px;align-items:center;
-  margin-bottom:16px;
-}
-.toolbar .filter-info{
-  font-size:.78rem;color:var(--yellow);margin-left:auto;
-  font-family:var(--font-mono);
-}
+  /* ── Header ── */
+  .header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 28px; }
+  .header h1 {
+    font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
+    background: var(--accent-g); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .header .sub { font-size: 13px; color: var(--fg2); font-weight: 400; letter-spacing: 0.3px; }
 
-/* ── Progress ── */
-.progress-wrap{margin-bottom:12px;display:flex;align-items:center;gap:14px}
-.progress-bar{
-  flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;
-}
-.progress-bar .fill{
-  height:100%;background:linear-gradient(90deg,var(--accent),var(--green));
-  border-radius:2px;transition:width .3s;width:0%;
-}
-.progress-bar.indeterminate .fill{
-  width:30%;animation:indeterminate 1.5s ease-in-out infinite;
-}
-@keyframes indeterminate{
-  0%{margin-left:-30%}100%{margin-left:100%}
-}
-.status-text{font-size:.78rem;color:var(--fg3);font-family:var(--font-mono);white-space:nowrap;max-width:400px;overflow:hidden;text-overflow:ellipsis}
+  /* ── Cards ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; color: var(--fg2); margin-bottom: 14px; }
 
-/* ── Table ── */
-.table-wrap{
-  background:var(--surface);border:1px solid rgba(255,255,255,.04);
-  border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow);
-}
-.table-scroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:.82rem}
-thead{position:sticky;top:0;z-index:2}
-thead th{
-  background:var(--bg3);color:var(--accent);font-weight:600;
-  text-transform:uppercase;letter-spacing:.06em;font-size:.7rem;
-  padding:12px 14px;text-align:left;border-bottom:1px solid var(--overlay);
-  white-space:nowrap;user-select:none;cursor:pointer;
-}
-thead th:hover{color:var(--accent2)}
-thead th.center{text-align:center}
-tbody tr{border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s}
-tbody tr:hover{background:var(--accent-glow)}
-tbody td{padding:10px 14px;font-family:var(--font-mono);font-size:.8rem;white-space:nowrap}
-tbody td.center{text-align:center}
-tbody td.domain{
-  color:var(--accent2);cursor:pointer;font-weight:500;
-  transition:color .15s;
-}
-tbody td.domain:hover{color:#fff;text-decoration:underline}
-tbody td.price{color:var(--green);font-weight:600}
-tbody td.years-10{color:var(--yellow);font-weight:700}
-tbody td.error{color:var(--red);font-style:italic}
-tbody td.pending{color:var(--fg3)}
-tbody td .spinner{
-  display:inline-block;width:14px;height:14px;
-  border:2px solid var(--overlay);border-top-color:var(--accent);
-  border-radius:50%;animation:spin .7s linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg)}}
+  /* ── Search bar ── */
+  .search-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; font-weight: 500; color: var(--fg2); text-transform: uppercase; letter-spacing: 0.8px; }
+  .field input {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--fg);
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,.15); }
+  .field input::placeholder { color: var(--fg2); opacity: .5; }
 
-.empty-state{
-  text-align:center;padding:60px 20px;color:var(--fg3);
-}
-.empty-state .icon{font-size:3rem;margin-bottom:12px}
-.empty-state p{font-size:.9rem;max-width:360px;margin:0 auto;line-height:1.6}
+  .btn {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px; font-weight: 600;
+    border: none; border-radius: 7px;
+    padding: 11px 22px;
+    cursor: pointer;
+    transition: transform .1s, opacity .2s, box-shadow .2s;
+    display: inline-flex; align-items: center; gap: 7px;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent-g); color: #fff; box-shadow: 0 2px 12px rgba(108,99,255,.3); }
+  .btn-primary:hover:not(:disabled) { box-shadow: 0 4px 20px rgba(108,99,255,.45); }
+  .btn-green { background: var(--green-g); color: #0c0c14; box-shadow: 0 2px 12px rgba(52,211,153,.25); }
+  .btn-green:hover:not(:disabled) { box-shadow: 0 4px 20px rgba(52,211,153,.4); }
+  .btn-ghost { background: var(--surface); color: var(--fg); border: 1px solid var(--border); }
+  .btn-ghost:hover:not(:disabled) { background: var(--bg3); }
 
-/* ── Footer ── */
-.footer{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:12px 0;margin-top:8px;
-}
-.footer .stats{font-size:.78rem;color:var(--fg3);font-family:var(--font-mono)}
+  /* ── Filter bar ── */
+  .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .filter-info { font-size: 12px; color: var(--yellow); margin-left: 8px; }
 
-/* ── Modal ── */
-.modal-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.65);
-  display:flex;align-items:center;justify-content:center;z-index:100;
-  backdrop-filter:blur(4px);animation:fadeIn .2s;
-}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.modal{
-  background:var(--surface);border:1px solid var(--overlay);
-  border-radius:var(--radius-lg);width:90%;max-width:720px;
-  max-height:80vh;display:flex;flex-direction:column;
-  box-shadow:var(--shadow-lg);animation:modalIn .25s;
-}
-@keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
-.modal-header{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:16px 20px;border-bottom:1px solid var(--overlay);
-}
-.modal-header h3{font-size:1rem;font-weight:600}
-.modal-header button{
-  background:none;border:none;color:var(--fg3);font-size:1.4rem;
-  cursor:pointer;padding:4px 8px;border-radius:4px;
-}
-.modal-header button:hover{background:var(--overlay);color:var(--fg)}
-.modal-body{
-  flex:1;overflow-y:auto;padding:16px 20px;
-}
-.modal-body pre{
-  font-family:var(--font-mono);font-size:.75rem;
-  color:var(--fg2);line-height:1.6;white-space:pre-wrap;word-break:break-all;
-}
+  /* ── Status bar ── */
+  .status-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
+  .progress-track { flex: 1; height: 4px; background: var(--surface); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: var(--accent-g); border-radius: 4px; transition: width .3s; }
+  .progress-fill.indeterminate {
+    width: 30%;
+    animation: indeterminate 1.4s ease-in-out infinite;
+  }
+  @keyframes indeterminate {
+    0% { margin-left: -30%; }
+    100% { margin-left: 100%; }
+  }
+  .status-text { font-size: 12px; color: var(--yellow); white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
 
-/* ── Context Menu ── */
-.ctx-menu{
-  position:fixed;background:var(--surface2);border:1px solid var(--overlay);
-  border-radius:8px;padding:4px;min-width:180px;z-index:50;
-  box-shadow:var(--shadow-lg);animation:fadeIn .12s;
-}
-.ctx-menu button{
-  display:flex;align-items:center;gap:8px;width:100%;
-  padding:8px 12px;background:none;border:none;color:var(--fg);
-  font-size:.8rem;cursor:pointer;border-radius:6px;text-align:left;
-}
-.ctx-menu button:hover{background:var(--accent-glow);color:var(--accent2)}
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    padding: 12px 14px;
+    text-align: left;
+    position: sticky; top: 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { background: var(--bg3); }
+  thead th.sorted-asc::after { content: ' ▲'; font-size: 9px; }
+  thead th.sorted-desc::after { content: ' ▼'; font-size: 9px; }
+  tbody tr {
+    border-bottom: 1px solid rgba(42,42,72,.5);
+    transition: background .15s;
+  }
+  tbody tr:hover { background: var(--bg3); }
+  tbody td { padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap; }
+  td.domain-cell {
+    color: var(--accent);
+    cursor: pointer;
+    font-weight: 500;
+  }
+  td.domain-cell:hover { text-decoration: underline; }
+  td.num-cell { color: var(--fg2); text-align: center; width: 50px; }
+  td.price-cell { text-align: center; color: var(--green); font-weight: 500; }
+  td.date-cell { text-align: center; color: var(--fg); }
+  td.years-cell { text-align: center; font-weight: 600; }
+  td.years-cell.y10 { color: var(--green); }
+  td.years-cell.y-other { color: var(--fg2); }
+  td.registrar-cell { color: var(--fg2); max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+  td.error-cell { color: var(--red); }
+  td.pending-cell { color: var(--fg2); opacity: .4; }
 
-/* ── Toast ── */
-.toast{
-  position:fixed;bottom:24px;right:24px;
-  background:var(--surface2);border:1px solid var(--overlay);
-  color:var(--fg);padding:12px 20px;border-radius:10px;
-  font-size:.82rem;box-shadow:var(--shadow-lg);z-index:200;
-  animation:toastIn .3s;
-}
-.toast.success{border-color:var(--green)}
-.toast.error{border-color:var(--red)}
-@keyframes toastIn{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+  .empty-state {
+    text-align: center; padding: 60px 20px;
+    color: var(--fg2); font-size: 14px;
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; display: block; opacity: .3; }
 
-/* ── Responsive ── */
-@media(max-width:768px){
-  .app{padding:12px 14px 30px}
-  .header h1{font-size:1.5rem}
-  .search-bar{padding:14px 16px}
-  .field.sm input{width:70px}
-  tbody td{padding:8px 10px;font-size:.75rem}
-}
+  /* ── Footer stats ── */
+  .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+  .stats { font-size: 12px; color: var(--fg2); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--fg); padding: 12px 20px;
+    border-radius: 8px; font-size: 13px;
+    box-shadow: var(--shadow);
+    transform: translateY(120%); opacity: 0;
+    transition: transform .3s, opacity .3s;
+    z-index: 999;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .app { padding: 16px; }
+    .header h1 { font-size: 22px; }
+    .search-row { flex-direction: column; }
+    .field { width: 100%; }
+    .field input { width: 100%; }
+    .btn { width: 100%; justify-content: center; }
+  }
+
+  /* ── Context menu ── */
+  .ctx-menu {
+    position: fixed; z-index: 1000;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 0;
+    min-width: 180px; box-shadow: var(--shadow);
+    display: none;
+  }
+  .ctx-menu.active { display: block; }
+  .ctx-menu-item {
+    padding: 9px 16px; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    transition: background .1s;
+  }
+  .ctx-menu-item:hover { background: var(--bg3); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--fg2); }
+
+  /* ── Skeleton loading ── */
+  .skeleton { background: linear-gradient(90deg, var(--surface) 25%, var(--bg3) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 </style>
 </head>
 <body>
-<div class="app" id="app">
-
+<div class="app">
   <!-- Header -->
   <div class="header">
-    <h1>🏹 Domain Hunter</h1>
+    <h1>⚡ Domain Hunter</h1>
     <span class="sub">HugeDomains Scraper + WHOIS Lookup</span>
   </div>
 
-  <!-- Search Bar -->
-  <div class="search-bar">
-    <div class="field grow">
-      <label>Keyword</label>
-      <input type="text" id="keyword" value="sport" placeholder="e.g. sport, crypto, tech" autofocus>
+  <!-- Search Card -->
+  <div class="card">
+    <div class="card-title">Search</div>
+    <div class="search-row">
+      <div class="field" style="flex:2;min-width:180px">
+        <label>Keyword</label>
+        <input type="text" id="keyword" placeholder="e.g. sport, tech, crypto" value="sport">
+      </div>
+      <div class="field" style="flex:0.7;min-width:100px">
+        <label>Max Price $</label>
+        <input type="text" id="priceMax" placeholder="495" value="495">
+      </div>
+      <div class="field" style="flex:0.5;min-width:80px">
+        <label>Max Rows</label>
+        <input type="text" id="maxRows" placeholder="100" value="100">
+      </div>
+      <button class="btn btn-primary" id="btnSearch" onclick="doSearch()">
+        <span>🔍</span> Search &amp; Scrape
+      </button>
+      <button class="btn btn-green" id="btnWhois" onclick="doWhoisAll()">
+        <span>🌐</span> WHOIS All
+      </button>
+      <button class="btn btn-ghost" onclick="exportCSV()">
+        <span>💾</span> Export CSV
+      </button>
     </div>
-    <div class="field sm">
-      <label>Price Max $</label>
-      <input type="text" id="priceMax" value="495">
-    </div>
-    <div class="field sm">
-      <label>Max Rows</label>
-      <input type="text" id="maxRows" value="100">
-    </div>
-    <button class="btn btn-primary" id="searchBtn" onclick="startSearch()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
-      Search
-    </button>
-    <button class="btn btn-green" id="whoisBtn" onclick="startWhois()" disabled>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-      WHOIS All
-    </button>
-    <button class="btn btn-ghost" onclick="exportCSV()" title="Export CSV">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      CSV
-    </button>
   </div>
 
-  <!-- Toolbar -->
-  <div class="toolbar">
-    <button class="btn btn-ghost btn-sm" onclick="filter10Year()">🎯 10-Year Only</button>
-    <button class="btn btn-ghost btn-sm" onclick="showAll()">📋 Show All</button>
-    <span class="filter-info" id="filterInfo"></span>
+  <!-- Filter Card -->
+  <div class="card" style="padding: 12px 24px;">
+    <div class="filter-row">
+      <span style="font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:1px;font-weight:600;">Filter</span>
+      <button class="btn btn-primary" style="padding:7px 16px;font-size:12px;" onclick="filter10y()">🎯 10-Year Only</button>
+      <button class="btn btn-ghost" style="padding:7px 16px;font-size:12px;" onclick="showAll()">📋 Show All</button>
+      <span class="filter-info" id="filterInfo"></span>
+    </div>
   </div>
 
-  <!-- Progress -->
-  <div class="progress-wrap">
-    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
-    <span class="status-text" id="statusText">Ready — enter a keyword and click Search</span>
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="status-text" id="statusText">Ready — enter a keyword and hit Search</div>
   </div>
 
   <!-- Table -->
-  <div class="table-wrap">
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th class="center" style="width:45px">#</th>
-            <th>Domain</th>
-            <th class="center">Price</th>
-            <th class="center">Created</th>
-            <th class="center">Expires</th>
-            <th class="center">Years</th>
-            <th>Registrar</th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="7">
-            <div class="empty-state">
-              <div class="icon">🏹</div>
-              <p>Enter a keyword above and hit Search to find domains on HugeDomains</p>
-            </div>
-          </td></tr>
-        </tbody>
-      </table>
-    </div>
+  <div class="table-wrap" style="max-height:60vh;overflow-y:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th data-col="num" style="width:50px;text-align:center">#</th>
+          <th data-col="domain">Domain</th>
+          <th data-col="price" style="text-align:center">Price</th>
+          <th data-col="created" style="text-align:center">Created</th>
+          <th data-col="expires" style="text-align:center">Expires</th>
+          <th data-col="years" style="text-align:center">Years</th>
+          <th data-col="registrar">Registrar</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="7"><div class="empty-state"><span class="icon">🏹</span>Search for domains to get started</div></td></tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- Footer -->
   <div class="footer">
-    <span class="stats" id="stats">0 domains</span>
+    <div class="stats" id="stats">0 domains loaded</div>
+    <div class="stats" id="apiInfo" style="color:var(--fg2);font-size:11px;">API: /api/scrape · /api/whois</div>
   </div>
-
 </div>
 
 <!-- Context Menu -->
-<div class="ctx-menu" id="ctxMenu" style="display:none">
-  <button onclick="ctxGoogle()">🔎 Search on Google</button>
-  <button onclick="ctxWhois()">🌐 WHOIS this domain</button>
-  <button onclick="ctxRawWhois()">📄 View Raw WHOIS</button>
-  <button onclick="ctxCopy()">📋 Copy domain</button>
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-menu-item" onclick="ctxGoogle()">🔎 Search on Google</div>
+  <div class="ctx-menu-item" onclick="ctxWhois()">🌐 WHOIS this domain</div>
+  <div class="ctx-menu-item" onclick="ctxCopy()">📋 Copy domain</div>
 </div>
 
-<!-- Raw WHOIS Modal (hidden) -->
-<div class="modal-overlay" id="modalOverlay" style="display:none" onclick="closeModal(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <h3 id="modalTitle">Raw WHOIS</h3>
-      <button onclick="closeModal()">&times;</button>
-    </div>
-    <div class="modal-body">
-      <pre id="modalBody"></pre>
-    </div>
-  </div>
-</div>
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <script>
-// ── State ──
-let domains = [];           // full dataset
-let filtered = null;        // null = show all, else array of indices
+// ─── State ───
+let allDomains = [];       // full data array
+let visibleDomains = [];   // filtered view
+let sortCol = null;
+let sortDir = 'asc';
+let ctxDomain = null;
 let isSearching = false;
 let isWhoisRunning = false;
-let ctxIndex = -1;
-let whoisAbort = false;
 
-const API_BASE = window.location.origin;
+const $ = id => document.getElementById(id);
+const tbody = $('tbody');
+const progressFill = $('progressFill');
+const statusText = $('statusText');
 
-// ── DOM refs ──
-const $tbody = document.getElementById('tbody');
-const $status = document.getElementById('statusText');
-const $stats = document.getElementById('stats');
-const $filterInfo = document.getElementById('filterInfo');
-const $progressBar = document.getElementById('progressBar');
-const $progressFill = document.getElementById('progressFill');
-const $searchBtn = document.getElementById('searchBtn');
-const $whoisBtn = document.getElementById('whoisBtn');
-const $ctxMenu = document.getElementById('ctxMenu');
+// ─── Toast ───
+function toast(msg, duration = 3000) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
 
-// Enter key to search
-document.getElementById('keyword').addEventListener('keydown', e => { if(e.key==='Enter') startSearch() });
+// ─── Progress ───
+function setProgress(pct) {
+  progressFill.classList.remove('indeterminate');
+  progressFill.style.width = pct + '%';
+}
+function setIndeterminate() {
+  progressFill.classList.add('indeterminate');
+  progressFill.style.width = '';
+}
+function setStatus(msg) { statusText.textContent = msg; }
 
-// Hide context menu on click elsewhere
-document.addEventListener('click', () => $ctxMenu.style.display = 'none');
+// ─── Sorting ───
+document.querySelectorAll('thead th').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (!col || visibleDomains.length === 0) return;
+    document.querySelectorAll('thead th').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = 'asc';
+    }
+    th.classList.add(sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    sortAndRender();
+  });
+});
 
-// ── Search ──
-async function startSearch() {
+function sortAndRender() {
+  if (!sortCol) { renderTable(visibleDomains); return; }
+  const sorted = [...visibleDomains].sort((a, b) => {
+    let va = a[sortCol] ?? '';
+    let vb = b[sortCol] ?? '';
+    if (sortCol === 'years' || sortCol === 'num') {
+      va = parseFloat(va) || 0;
+      vb = parseFloat(vb) || 0;
+    } else if (sortCol === 'price') {
+      va = parseFloat(String(va).replace(/[^0-9.]/g, '')) || 0;
+      vb = parseFloat(String(vb).replace(/[^0-9.]/g, '')) || 0;
+    } else {
+      va = String(va).toLowerCase();
+      vb = String(vb).toLowerCase();
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  renderTable(sorted);
+}
+
+// ─── Render ───
+function calcYears(row) {
+  if (!row.created || !row.expires) return null;
+  if (['—','N/A','Error',null,undefined,'null','None'].includes(row.created)) return null;
+  if (['—','N/A','Error',null,undefined,'null','None'].includes(row.expires)) return null;
+  try {
+    const c = new Date(row.created);
+    const e = new Date(row.expires);
+    if (isNaN(c) || isNaN(e)) return null;
+    return ((e - c) / (365.25 * 86400000)).toFixed(1);
+  } catch { return null; }
+}
+
+function renderTable(list) {
+  if (!list || list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span class="icon">🏹</span>No domains to display</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map((r, i) => {
+    const years = r.years ?? calcYears(r);
+    const yClass = years !== null ? (parseFloat(years) >= 9.5 && parseFloat(years) <= 10.5 ? 'y10' : 'y-other') : '';
+    const isPending = !r.created || r.created === '—';
+    const isError = r.created === 'Error';
+    return `<tr data-domain="${esc(r.domain)}" oncontextmenu="showCtx(event, '${esc(r.domain)}')">
+      <td class="num-cell">${r.num ?? i+1}</td>
+      <td class="domain-cell" onclick="window.open('https://www.google.com/search?q=${encodeURIComponent(r.domain)}','_blank')">${esc(r.domain)}</td>
+      <td class="price-cell">${r.price ? esc(r.price) : '—'}</td>
+      <td class="${isError ? 'error-cell' : isPending ? 'pending-cell' : 'date-cell'}">${esc(r.created || '—')}</td>
+      <td class="${isError ? 'error-cell' : isPending ? 'pending-cell' : 'date-cell'}">${esc(r.expires || '—')}</td>
+      <td class="years-cell ${yClass}">${years !== null ? years : '—'}</td>
+      <td class="registrar-cell">${esc(r.registrar || '—')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+// ─── API Calls ───
+async function doSearch() {
   if (isSearching) return;
-  const keyword = document.getElementById('keyword').value.trim();
-  if (!keyword) { toast('Enter a keyword', 'error'); return; }
+  const keyword = $('keyword').value.trim();
+  if (!keyword) { toast('Enter a keyword'); return; }
 
   isSearching = true;
-  $searchBtn.disabled = true;
-  $whoisBtn.disabled = true;
-  filtered = null;
-  $filterInfo.textContent = '';
+  $('btnSearch').disabled = true;
+  setIndeterminate();
   setStatus(`Scraping HugeDomains for "${keyword}"...`);
-  setProgress(-1); // indeterminate
 
   try {
-    const params = new URLSearchParams({
-      keyword,
-      price_max: document.getElementById('priceMax').value || '495',
-      max_rows: document.getElementById('maxRows').value || '100',
+    const res = await fetch('/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keyword,
+        price_max: $('priceMax').value.trim() || '495',
+        max_rows: parseInt($('maxRows').value) || 100,
+      }),
     });
-    const resp = await fetch(`${API_BASE}/api/scrape?${params}`);
-    if (!resp.ok) {
-      const err = await resp.json().catch(()=>({}));
-      throw new Error(err.error || `HTTP ${resp.status}`);
-    }
-    const data = await resp.json();
-    domains = (data.domains || []).map((d, i) => ({
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Scrape failed');
+
+    allDomains = (data.domains || []).map((d, i) => ({
       num: i + 1,
       domain: d.domain,
       price: d.price || '',
@@ -394,216 +468,196 @@ async function startSearch() {
       expires: null,
       years: null,
       registrar: null,
-      raw_whois: null,
-      whois_done: false,
-      whois_loading: false,
-      whois_error: null,
     }));
-    renderTable();
-    $whoisBtn.disabled = domains.length === 0;
-    setStatus(`Found ${domains.length} domains. Click "WHOIS All" to check dates.`);
-    $stats.textContent = `${domains.length} domains`;
+    visibleDomains = [...allDomains];
+    renderTable(visibleDomains);
+    $('stats').textContent = `${allDomains.length} domains loaded`;
+    setStatus(`Found ${allDomains.length} domains. Click "WHOIS All" to check dates.`);
+    setProgress(100);
+    $('filterInfo').textContent = '';
+    toast(`${allDomains.length} domains found`);
   } catch (e) {
     setStatus(`Error: ${e.message}`);
-    toast(e.message, 'error');
+    toast(`Error: ${e.message}`);
   } finally {
     isSearching = false;
-    $searchBtn.disabled = false;
-    setProgress(0);
+    $('btnSearch').disabled = false;
+    setTimeout(() => setProgress(0), 1500);
   }
 }
 
-// ── WHOIS All (sequential) ──
-async function startWhois() {
-  if (isWhoisRunning || domains.length === 0) return;
-  isWhoisRunning = true;
-  whoisAbort = false;
-  $whoisBtn.disabled = true;
-  $whoisBtn.innerHTML = '⏹ Stop';
-  $whoisBtn.onclick = () => { whoisAbort = true; };
-  $whoisBtn.disabled = false;
+async function doWhoisAll() {
+  if (isWhoisRunning || allDomains.length === 0) {
+    if (allDomains.length === 0) toast('Search for domains first');
+    return;
+  }
 
-  const total = domains.length;
-  for (let i = 0; i < total; i++) {
-    if (whoisAbort) { setStatus(`WHOIS stopped at ${i}/${total}`); break; }
-    const d = domains[i];
-    if (d.whois_done) continue;
-    d.whois_loading = true;
-    updateRow(i);
-    setStatus(`WHOIS [${i+1}/${total}]  ${d.domain}`);
-    setProgress((i + 1) / total * 100);
+  isWhoisRunning = true;
+  $('btnWhois').disabled = true;
+  const total = allDomains.length;
+  const BATCH = 5;  // process 5 at a time
+
+  for (let i = 0; i < total; i += BATCH) {
+    const batch = allDomains.slice(i, i + BATCH);
+    const domainNames = batch.map(d => d.domain);
+
+    setStatus(`WHOIS [${Math.min(i + BATCH, total)}/${total}] ...`);
+    setProgress(((i + BATCH) / total) * 100);
 
     try {
-      const resp = await fetch(`${API_BASE}/api/whois?domain=${encodeURIComponent(d.domain)}`);
-      const w = await resp.json();
-      if (w.error) throw new Error(w.error);
-      d.created = w.created;
-      d.expires = w.expires;
-      d.years = w.years;
-      d.registrar = w.registrar;
-      d.raw_whois = w.raw || '';
-      d.whois_done = true;
-      d.whois_error = null;
+      const res = await fetch('/api/whois', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domains: domainNames }),
+      });
+      const data = await res.json();
+      if (data.results) {
+        for (const d of batch) {
+          const w = data.results[d.domain.toLowerCase()];
+          if (w) {
+            d.created = w.created || 'N/A';
+            d.expires = w.expires || 'N/A';
+            d.registrar = w.registrar || '';
+            d.years = calcYears(d);
+            if (w.error) {
+              d.created = 'Error';
+              d.expires = w.error.substring(0, 30);
+            }
+          }
+        }
+      }
     } catch (e) {
-      d.whois_error = e.message;
-      d.whois_done = true;
+      for (const d of batch) {
+        d.created = 'Error';
+        d.expires = e.message.substring(0, 30);
+      }
     }
-    d.whois_loading = false;
-    updateRow(i);
+
+    // Live-update table
+    visibleDomains = applyCurrentFilter();
+    sortCol ? sortAndRender() : renderTable(visibleDomains);
   }
 
   isWhoisRunning = false;
-  $whoisBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> WHOIS All`;
-  $whoisBtn.onclick = () => startWhois();
-  $whoisBtn.disabled = false;
-  if (!whoisAbort) setStatus('WHOIS lookup complete ✓');
+  $('btnWhois').disabled = false;
+  setStatus('WHOIS lookup complete ✓');
   setProgress(100);
+  toast('WHOIS lookup complete');
+  setTimeout(() => setProgress(0), 2000);
 }
 
-// ── Single WHOIS ──
-async function whoisSingle(idx) {
-  const d = domains[idx];
-  d.whois_loading = true;
-  updateRow(idx);
+async function whoisSingle(domain) {
   try {
-    const resp = await fetch(`${API_BASE}/api/whois?domain=${encodeURIComponent(d.domain)}`);
-    const w = await resp.json();
-    if (w.error) throw new Error(w.error);
-    d.created = w.created; d.expires = w.expires; d.years = w.years;
-    d.registrar = w.registrar; d.raw_whois = w.raw || '';
-    d.whois_done = true; d.whois_error = null;
-  } catch (e) { d.whois_error = e.message; d.whois_done = true; }
-  d.whois_loading = false;
-  updateRow(idx);
-}
-
-// ── Render ──
-function renderTable() {
-  const list = filtered !== null ? filtered.map(i => domains[i]) : domains;
-  if (list.length === 0) {
-    $tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">📭</div><p>No domains found</p></div></td></tr>`;
-    return;
+    const res = await fetch('/api/whois', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    });
+    const data = await res.json();
+    if (data.results && data.results[domain.toLowerCase()]) {
+      const w = data.results[domain.toLowerCase()];
+      const row = allDomains.find(d => d.domain.toLowerCase() === domain.toLowerCase());
+      if (row) {
+        row.created = w.created || 'N/A';
+        row.expires = w.expires || 'N/A';
+        row.registrar = w.registrar || '';
+        row.years = calcYears(row);
+        if (w.error) { row.created = 'Error'; row.expires = w.error.substring(0, 30); }
+        visibleDomains = applyCurrentFilter();
+        sortCol ? sortAndRender() : renderTable(visibleDomains);
+      }
+    }
+    toast(`WHOIS done: ${domain}`);
+  } catch (e) {
+    toast(`WHOIS error: ${e.message}`);
   }
-  $tbody.innerHTML = list.map((d, vi) => rowHTML(d, vi)).join('');
 }
 
-function rowHTML(d) {
-  const cr = d.whois_loading ? '<span class="spinner"></span>' : d.whois_error ? '<span class="error">Error</span>' : d.created || '<span class="pending">—</span>';
-  const ex = d.whois_loading ? '' : d.whois_error ? `<span class="error" title="${esc(d.whois_error)}">${d.whois_error.slice(0,20)}</span>` : d.expires || '<span class="pending">—</span>';
-  const yr = d.years != null ? d.years : '—';
-  const yrClass = (d.years && d.years >= 9.5 && d.years <= 10.5) ? 'years-10' : '';
-  const reg = d.registrar ? esc(d.registrar).slice(0, 40) : '—';
-  return `<tr data-idx="${d.num - 1}" oncontextmenu="showCtx(event, ${d.num - 1})">
-    <td class="center">${d.num}</td>
-    <td class="domain" onclick="openGoogle('${esc(d.domain)}')">${esc(d.domain)}</td>
-    <td class="center price">${d.price ? '$' + esc(d.price) : '—'}</td>
-    <td class="center">${cr}</td>
-    <td class="center">${ex}</td>
-    <td class="center ${yrClass}">${yr}</td>
-    <td>${reg}</td>
-  </tr>`;
+// ─── Filters ───
+let currentFilter = 'all';
+
+function applyCurrentFilter() {
+  if (currentFilter === '10y') {
+    return allDomains.filter(r => {
+      const y = parseFloat(calcYears(r));
+      return !isNaN(y) && y >= 9.5 && y <= 10.5;
+    });
+  }
+  return [...allDomains];
 }
 
-function updateRow(idx) {
-  const d = domains[idx];
-  // Find row in DOM
-  const row = $tbody.querySelector(`tr[data-idx="${idx}"]`);
-  if (!row) return;
-  row.outerHTML = rowHTML(d);
-}
-
-// ── Filters ──
-function filter10Year() {
-  const has = domains.some(d => d.whois_done);
-  if (!has) { toast('Run WHOIS first', 'error'); return; }
-  filtered = [];
-  domains.forEach((d, i) => {
-    if (d.years && d.years >= 9.5 && d.years <= 10.5) filtered.push(i);
-  });
-  renderTable();
-  $filterInfo.textContent = `🎯 ${filtered.length} of ${domains.length} — 10-year only`;
-  $stats.textContent = `${filtered.length} domains (filtered)`;
+function filter10y() {
+  if (allDomains.length === 0) { toast('Search for domains first'); return; }
+  const hasWhois = allDomains.some(r => r.created && !['—', null].includes(r.created));
+  if (!hasWhois) { toast('Run WHOIS first'); return; }
+  currentFilter = '10y';
+  visibleDomains = applyCurrentFilter();
+  sortCol ? sortAndRender() : renderTable(visibleDomains);
+  $('filterInfo').textContent = `🎯 Showing ${visibleDomains.length} of ${allDomains.length} — 10-year registration only`;
+  $('stats').textContent = `${visibleDomains.length} domains (filtered)`;
 }
 
 function showAll() {
-  filtered = null;
-  $filterInfo.textContent = '';
-  renderTable();
-  $stats.textContent = `${domains.length} domains`;
+  currentFilter = 'all';
+  visibleDomains = [...allDomains];
+  sortCol ? sortAndRender() : renderTable(visibleDomains);
+  $('filterInfo').textContent = '';
+  $('stats').textContent = `${allDomains.length} domains loaded`;
 }
 
-// ── Export CSV ──
+// ─── CSV Export ───
 function exportCSV() {
-  const list = filtered !== null ? filtered.map(i => domains[i]) : domains;
-  if (!list.length) { toast('Nothing to export', 'error'); return; }
-  const headers = ['#','Domain','Price','Created','Expires','Years','Registrar'];
-  const rows = list.map(d => [
-    d.num, d.domain, d.price, d.created||'', d.expires||'', d.years??'', d.registrar||''
+  const list = visibleDomains.length ? visibleDomains : allDomains;
+  if (!list.length) { toast('No data to export'); return; }
+  const headers = ['#', 'Domain', 'Price', 'Created', 'Expires', 'Years', 'Registrar'];
+  const rows = list.map((r, i) => [
+    r.num ?? i + 1,
+    r.domain,
+    r.price || '',
+    r.created || '',
+    r.expires || '',
+    calcYears(r) ?? '',
+    r.registrar || '',
   ]);
-  const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type: 'text/csv'});
+  let csv = headers.join(',') + '\n';
+  for (const row of rows) {
+    csv += row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',') + '\n';
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `domains_${document.getElementById('keyword').value.trim()}.csv`;
+  a.download = `domains_${$('keyword').value.trim() || 'export'}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  toast('CSV downloaded', 'success');
+  toast(`Exported ${list.length} rows`);
 }
 
-// ── Context Menu ──
-function showCtx(e, idx) {
+// ─── Context Menu ───
+function showCtx(e, domain) {
   e.preventDefault();
-  ctxIndex = idx;
-  $ctxMenu.style.display = 'block';
-  $ctxMenu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
-  $ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px';
+  ctxDomain = domain;
+  const menu = $('ctxMenu');
+  menu.style.top = e.clientY + 'px';
+  menu.style.left = e.clientX + 'px';
+  menu.classList.add('active');
 }
-function ctxGoogle() { if(ctxIndex>=0) openGoogle(domains[ctxIndex].domain); }
-function ctxWhois() { if(ctxIndex>=0) whoisSingle(ctxIndex); }
-function ctxRawWhois() {
-  if (ctxIndex < 0) return;
-  const d = domains[ctxIndex];
-  if (!d.raw_whois && !d.whois_done) { whoisSingle(ctxIndex); return; }
-  showModal(`Raw WHOIS — ${d.domain}`, d.raw_whois || 'No data. Run WHOIS first.');
+document.addEventListener('click', () => $('ctxMenu').classList.remove('active'));
+
+function ctxGoogle() {
+  if (ctxDomain) window.open(`https://www.google.com/search?q=${encodeURIComponent(ctxDomain)}`, '_blank');
+}
+function ctxWhois() {
+  if (ctxDomain) whoisSingle(ctxDomain);
 }
 function ctxCopy() {
-  if (ctxIndex >= 0) {
-    navigator.clipboard.writeText(domains[ctxIndex].domain);
-    toast('Copied!', 'success');
+  if (ctxDomain) {
+    navigator.clipboard.writeText(ctxDomain).then(() => toast('Copied: ' + ctxDomain));
   }
 }
 
-function openGoogle(domain) {
-  window.open(`https://www.google.com/search?q=${encodeURIComponent(domain)}`, '_blank');
-}
-
-// ── Modal ──
-function showModal(title, body) {
-  document.getElementById('modalTitle').textContent = title;
-  document.getElementById('modalBody').textContent = body;
-  document.getElementById('modalOverlay').style.display = 'flex';
-}
-function closeModal(e) {
-  if (!e || e.target.id === 'modalOverlay' || e.target.tagName === 'BUTTON')
-    document.getElementById('modalOverlay').style.display = 'none';
-}
-
-// ── Helpers ──
-function setStatus(msg) { $status.textContent = msg; }
-function setProgress(pct) {
-  if (pct < 0) { $progressBar.classList.add('indeterminate'); $progressFill.style.width = '30%'; }
-  else { $progressBar.classList.remove('indeterminate'); $progressFill.style.width = pct + '%'; }
-}
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-function toast(msg, type='') {
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 2500);
-}
+// ─── Keyboard shortcut ───
+$('keyword').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 </script>
 </body>
 </html>
