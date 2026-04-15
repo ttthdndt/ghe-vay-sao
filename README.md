@@ -11,7 +11,7 @@ Scrapes domain listings from HugeDomains.com and performs WHOIS date lookups to 
 ## Features
 
 - **Search** HugeDomains by keyword, price range, and result count
-- **WHOIS lookup** for all results — shows created/expires dates, registration years, registrar
+- **WHOIS lookup** for alsl results — shows created/expires dates, registration years, registrar
 - **10-Year filter** — highlight domains with exactly 10-year registration spans
 - **Export CSV** — download filtered or full results
 - **Raw WHOIS viewer** — inspect full WHOIS response for any domain
